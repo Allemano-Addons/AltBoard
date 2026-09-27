@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+- Fix: "attempt to perform arithmetic on ... a secret number value" when stats changed in
+  combat. WoW Forever hides some values (attack power...) from addons during combat; stats are
+  now read when combat ends, and any secret value is skipped instead of causing an error.
+
 ## 0.7.0
 - Bags and bank are saved per character (counts per item; random-suffix items kept apart).
   The bank is read whenever it is open; an unreadable or just-closed bank never overwrites.

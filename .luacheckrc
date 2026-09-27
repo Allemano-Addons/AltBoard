@@ -30,7 +30,7 @@ read_globals = {
     "UnitStat", "UnitArmor", "UnitHealthMax", "UnitPowerMax", "UnitPowerType", "UnitAttackPower", "UnitRangedAttackPower",
     "GetCritChance", "GetRangedCritChance", "GetHitModifier", "GetDodgeChance", "GetParryChance", "GetBlockChance",
     "UnitDefense", "GetSpellBonusDamage", "GetSpellBonusHealing", "GetSpellCritChance", "GetSpellHitModifier",
-    "UnitResistance", "GetShapeshiftForm", "ITEM_QUALITY_COLORS", "HandleModifiedItemClick", "ChatEdit_InsertLink",
+    "UnitResistance", "GetShapeshiftForm", "issecretvalue", "InCombatLockdown", "ITEM_QUALITY_COLORS", "HandleModifiedItemClick", "ChatEdit_InsertLink",
     "Enum", "C_Container", "GetContainerNumSlots", "GetContainerItemInfo", "NUM_BAG_SLOTS", "NUM_BANKBAGSLOTS", "BANK_CONTAINER",
     "C_CurrencyInfo", "GetCurrencyListSize", "GetCurrencyListInfo", "GetHonorCurrency", "GetPVPLifetimeStats",
 }

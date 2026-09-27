@@ -29,19 +29,27 @@ local function collectIdentity(c)
     c.faction = UnitFactionGroup("player")
     c.level = UnitLevel("player")
     c.guild = IsInGuild() and GetGuildInfo("player") or nil
-    c.rested = GetXPExhaustion and GetXPExhaustion() or nil
-    c.xp, c.xpMax = UnitXP("player"), UnitXPMax("player")
+    c.rested = Data.Safe(GetXPExhaustion)
+    c.xp, c.xpMax = Data.Safe(UnitXP, "player"), Data.Safe(UnitXPMax, "player")
 end
 
 local function collectMoney(c)
     c.money = GetMoney()
 end
 
--- pcall a function that may be missing on this client; nil if missing or failing.
+-- "Secret" values: in combat the client hides some numbers (attack power...) from addons;
+-- any math or comparison on them is an error. They are treated as "not available".
+local function plain(v)
+    if issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
+-- pcall a function that may be missing on this client; nil if missing or failing, and
+-- secret values come back as nil too.
 local function safe(fn, ...)
     if type(fn) ~= "function" then return nil end
     local ok, a, b, c, d, e = pcall(fn, ...)
-    if ok then return a, b, c, d, e end
+    if ok then return plain(a), plain(b), plain(c), plain(d), plain(e) end
 end
 Data.Safe = safe
 
@@ -194,7 +202,14 @@ end
 
 -- Stats as the character sheet shows them at that moment (buffs included). Anything the
 -- client does not offer is simply left out.
+local statsAfterCombat = false
+
 local function collectStats(c)
+    -- Never in combat: the values may be secret then (and buffed). Read once it ends.
+    if InCombatLockdown() then
+        statsAfterCombat = true
+        return
+    end
     -- Druid forms change stats a lot (bear armor): keep the caster-form values.
     if c.stats and select(2, UnitClass("player")) == "DRUID" and (safe(GetShapeshiftForm) or 0) > 0 then return end
     local s = {}
@@ -398,6 +413,13 @@ end
 for _, event in ipairs({ "COMBAT_RATING_UPDATE", "SPELL_POWER_CHANGED", "PLAYER_DAMAGE_DONE_MODS" }) do
     AB:RegisterEvent(event, function() Data.Mark("stats") end)
 end
+-- Stat changes during combat are read when it ends.
+AB:RegisterEvent("PLAYER_REGEN_ENABLED", function()
+    if statsAfterCombat then
+        statsAfterCombat = false
+        Data.Mark("stats")
+    end
+end)
 
 -- Only while some equipped item was not loaded yet (this event fires for every item).
 AB:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()

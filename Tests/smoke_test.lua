@@ -136,6 +136,12 @@ GetCritChance = function() return 5.123 end
 GetSpellBonusDamage = function(school) return school == 3 and 12 or 0 end
 UnitResistance = function(_, school) return 0, school * 5 end
 GetShapeshiftForm = function() return 0 end
+-- Combat and "secret" values: any math on SECRET fails like in the game.
+local inCombat = false
+InCombatLockdown = function() return inCombat end
+local SECRET = setmetatable({}, { __add = function() error("attempt to perform arithmetic on a secret number value") end,
+    __lt = function() error("attempt to compare a secret number value") end })
+issecretvalue = function(v) return v == SECRET end
 local tooltipLink
 GameTooltip = setmetatable({ SetHyperlink = function(_, link) tooltipLink = link end }, { __index = function() return function() end end })
 local modifiedClick
@@ -335,6 +341,34 @@ step("sheet bags and bank tabs", function()
         end
     end
     scripts[sheet.tabs[1]].OnClick(sheet.tabs[1])
+end)
+
+-- Secret values (WoW Forever, in combat): the error the player reported.
+step("stats in combat wait until combat ends", function()
+    local c = AB.db.chars["Player-1-A"]
+    local realAP = UnitAttackPower
+    inCombat = true
+    UnitAttackPower = function() return SECRET, 10, 0 end
+    local before = #AB.errors
+    fire("UNIT_ATTACK_POWER", "player")
+    assert(#AB.errors == before, "error while collecting stats in combat: " .. tostring(AB.errors[#AB.errors] and AB.errors[#AB.errors].msg))
+    assert(c.stats.ap == 70, "stats changed during combat")
+    inCombat = false
+    UnitAttackPower = function() return 80, 10, 0 end
+    fire("PLAYER_REGEN_ENABLED")
+    assert(c.stats.ap == 90, "stats not read after combat: " .. tostring(c.stats.ap))
+    UnitAttackPower = realAP
+end)
+step("a secret value out of combat is skipped, not an error", function()
+    local c = AB.db.chars["Player-1-A"]
+    local realAP, realArmor = UnitAttackPower, UnitArmor
+    UnitAttackPower = function() return SECRET, SECRET, 0 end
+    UnitArmor = function() return 300, SECRET end
+    local before = #AB.errors
+    fire("UNIT_STATS", "player")
+    assert(#AB.errors == before, "error on a secret value: " .. tostring(AB.errors[#AB.errors] and AB.errors[#AB.errors].msg))
+    assert(c.stats.ap == nil and c.stats.armor == nil and c.stats.str == 21, "secret values should be left out")
+    UnitAttackPower, UnitArmor = realAP, realArmor
 end)
 
 print(#errors == 0 and "ALL OK" or (#errors .. " error(s)"))
