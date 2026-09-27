@@ -14,6 +14,7 @@ local scripts = setmetatable({}, { __mode = "k" })
 local function mock(kind)
     local o = { _kind = kind, _shown = kind ~= "Frame" and true or true }
     return setmetatable(o, { __index = function(t, k)
+        if type(k) ~= "string" or not k:match("^%u") then return nil end -- fields: nil, like real frames
         if k == "SetScript" then return function(self, name, fn) scripts[self] = scripts[self] or {}; scripts[self][name] = fn end end
         if k == "HookScript" then return function() end end
         if k == "GetScript" then return function(self, name) return scripts[self] and scripts[self][name] end end
@@ -123,6 +124,51 @@ step("character menu", function() AB.Board.CharacterMenu({ guid = "Player-1-A" }
 step("close settings", function() AB.Settings.Toggle() end)
 step("reopen settings", function() AB.Settings.Toggle() end)
 step("slash errors", function() SlashCmdList.ALTBOARD("errors") end)
+
+-- Hidden rows: right-click rows through their real OnMouseUp and pick menu items.
+local function visibleRows(pred)
+    local out = {}
+    for f, s in pairs(scripts) do
+        if s.OnMouseUp and f._shown and pred(f) then out[#out + 1] = f end
+    end
+    return out
+end
+local function rightClickAndPick(row, pick)
+    local realOpen = AB.Widgets.OpenMenu
+    local picked
+    AB.Widgets.OpenMenu = function(items) picked = items[pick] end
+    scripts[row].OnMouseUp(row, "RightButton")
+    AB.Widgets.OpenMenu = realOpen
+    assert(picked and picked.onClick, "menu item " .. pick .. " missing")
+    picked.onClick()
+end
+step("hide a reputation row", function()
+    AB.Board.Refresh()
+    local rows = visibleRows(function(f) return f.section == "Reputation" and f.rowId == 76 end)
+    assert(#rows == 1, "Orgrimmar row not found (" .. #rows .. ")")
+    rightClickAndPick(rows[1], 2)
+    assert(AB.db.settings.hiddenRows.Reputation[76] == "Orgrimmar", "not hidden")
+    assert(#visibleRows(function(f) return f.section == "Reputation" and f.rowId == 76 end) == 0, "still shown")
+    assert(#visibleRows(function(f) return f.section == "Reputation" and f.groupIds end) == 0, "empty group heading still shown")
+end)
+step("section menu: show all", function()
+    local heads = visibleRows(function(f) return f.toggle == "Reputation" end)
+    assert(#heads == 1, "heading not found")
+    rightClickAndPick(heads[1], 2)
+    assert(next(AB.db.settings.hiddenRows.Reputation) == nil, "not unhidden")
+end)
+step("hide a whole group", function()
+    local groups = visibleRows(function(f) return f.section == "Reputation" and f.groupIds end)
+    assert(#groups == 1, "group heading not found (" .. #groups .. ")")
+    rightClickAndPick(groups[1], 2)
+    assert(AB.db.settings.hiddenRows.Reputation[76], "group not hidden")
+end)
+step("hide an overview row", function()
+    local rows = visibleRows(function(f) return f.section == "Overview" and f.rowId == "Location" end)
+    assert(#rows == 1, "Location row not found")
+    rightClickAndPick(rows[1], 2)
+    assert(AB.db.settings.hiddenRows.Overview.Location, "not hidden")
+end)
 
 print(#errors == 0 and "ALL OK" or (#errors .. " error(s)"))
 os.exit(#errors == 0 and 0 or 1)

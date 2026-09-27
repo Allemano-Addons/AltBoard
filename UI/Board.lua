@@ -163,10 +163,13 @@ local function reputationRows(chars)
     sort(names)
     local out = {}
     for _, g in ipairs(names) do
-        out[#out + 1] = { group = g }
+        local gdef = { group = g, children = {} }
+        out[#out + 1] = gdef
         sort(groups[g], function(a, b) return a.name < b.name end)
         for _, f in ipairs(groups[g]) do
+            gdef.children[#gdef.children + 1] = f.id
             out[#out + 1] = {
+                id = f.id,
                 label = f.name,
                 value = function(c)
                     local rep = c.reps and c.reps[f.id]
@@ -208,14 +211,74 @@ local function createRow()
     row.label = W.Text(row, 0, "textDim")
     row.label:SetWidth(S.labelW - S.padding - 4)
     row.cells = {}
-    -- Section headings fold open/closed on click (remembered).
-    row:SetScript("OnMouseUp", function(self)
+    -- Section headings fold open/closed on left-click (remembered); right-click on any
+    -- row opens its menu (hide this row / unhide rows).
+    row:SetScript("OnMouseUp", function(self, button)
+        if button == "RightButton" then
+            if self.menu then AB:Call("row menu", self.menu, self) end
+            return
+        end
         if not self.toggle then return end
         local collapsed = AB.db.settings.collapsed
         collapsed[self.toggle] = not collapsed[self.toggle] or nil
         Board.Refresh()
     end)
     return row
+end
+
+-- ---------------------------------------------------------------------------
+-- Hidden rows: AltBoardDB.settings.hiddenRows[section][rowId] = label (kept for the
+-- unhide list, since a hidden row may no longer exist on any character).
+-- ---------------------------------------------------------------------------
+
+local function hiddenRows(section)
+    local all = AB.db.settings.hiddenRows
+    all[section] = all[section] or {}
+    return all[section]
+end
+
+local function hideRow(section, id, label)
+    hiddenRows(section)[id] = label or tostring(id)
+    Board.Refresh()
+end
+
+-- Right-click on a row (label or cell).
+local function rowMenu(row)
+    local items = { { text = row.rowLabel, title = true } }
+    if row.groupIds then
+        items[#items + 1] = { text = "Hide all in " .. row.rowLabel, onClick = function()
+            local hidden = hiddenRows(row.section)
+            for _, id in ipairs(row.groupIds) do hidden[id] = row.groupLabels[id] or tostring(id) end
+            Board.Refresh()
+        end }
+    else
+        items[#items + 1] = { text = "Hide row", onClick = function() hideRow(row.section, row.rowId, row.rowLabel) end }
+    end
+    W.OpenMenu(items, row.label)
+end
+
+-- Right-click on a section heading: unhide rows one by one or all at once.
+local function sectionMenu(row)
+    local hidden = hiddenRows(row.toggle)
+    local list = {}
+    for id, label in pairs(hidden) do list[#list + 1] = { id = id, label = label } end
+    sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
+    local items = { { text = row.toggle, title = true } }
+    if #list == 0 then
+        items[#items + 1] = { text = "No hidden rows", disabled = true }
+    else
+        items[#items + 1] = { text = "Show all hidden rows", onClick = function()
+            wipe(hidden)
+            Board.Refresh()
+        end }
+        for _, e in ipairs(list) do
+            items[#items + 1] = { text = "Show " .. tostring(e.label), onClick = function()
+                hidden[e.id] = nil
+                Board.Refresh()
+            end }
+        end
+    end
+    W.OpenMenu(items, row.label)
 end
 
 local function cell(row, i)
@@ -272,7 +335,8 @@ local function resetRow(row)
     for _, c in ipairs(row.cells) do c:Hide() end
     row.icon:Hide()
     row.label:ClearAllPoints()
-    row.toggle = nil
+    row.label:SetWidth(S.labelW - S.padding - 4)
+    row.toggle, row.menu, row.section, row.rowId, row.rowLabel, row.groupIds, row.groupLabels = nil, nil, nil, nil, nil, nil, nil
     row:EnableMouse(false)
 end
 
@@ -298,8 +362,8 @@ function Board.Refresh()
     if not frame or not frame:IsShown() then return end
     rowPool:ReleaseAll()
 
-    local hiddenCount = Data.HiddenCount()
-    if hiddenCount == 0 then Board.showHidden = false end
+    local hiddenChars = Data.HiddenCount()
+    if hiddenChars == 0 then Board.showHidden = false end
     local chars = Data.Characters(Board.showHidden)
     local nVis = visibleColumns(#chars)
     colOffset = max(0, min(colOffset, #chars - nVis))
@@ -308,8 +372,8 @@ function Board.Refresh()
 
     local total = money(Data.TotalMoney(AB.db.settings.totalIncludesHidden)) or "0"
     frame.total:SetText(total)
-    if hiddenCount > 0 then
-        frame.hiddenBtn.text:SetText(Board.showHidden and "hide hidden" or (hiddenCount .. " hidden"))
+    if hiddenChars > 0 then
+        frame.hiddenBtn.text:SetText(Board.showHidden and "hide hidden" or (hiddenChars .. " hidden"))
         frame.hiddenBtn:SetWidth(frame.hiddenBtn.text:GetStringWidth() + 12)
         frame.hiddenBtn:Show()
     else
@@ -358,16 +422,38 @@ function Board.Refresh()
 
     local collapsed = AB.db.settings.collapsed
 
-    local function section(title, rows, emptyText)
+    local function section(title, allRows, emptyText)
+        -- Drop hidden rows, then group headings left without any row.
+        local hidden = hiddenRows(title)
+        local labels, kept = {}, {}
+        for _, def in ipairs(allRows) do
+            if def.group then
+                kept[#kept + 1] = def
+            elseif not hidden[def.id or def.label] then
+                labels[def.id or def.label] = def.label
+                kept[#kept + 1] = def
+            end
+        end
+        local rows = {}
+        for i, def in ipairs(kept) do
+            local nextDef = kept[i + 1]
+            if not def.group or (nextDef and not nextDef.group) then rows[#rows + 1] = def end
+        end
+        local hiddenCount = 0
+        for _ in pairs(hidden) do hiddenCount = hiddenCount + 1 end
+
         local sr = rowPool:Acquire()
         placeRow(sr, y, S.sectionH)
         sr.label:SetPoint("BOTTOMLEFT", S.padding, 6)
         local closed = collapsed[title]
         local count = 0
         for _, def in ipairs(rows) do if not def.group then count = count + 1 end end
-        sr.label:SetText(strupper(title) .. colorCode("textFaint") .. (closed and ("   + " .. count) or "   -") .. "|r")
+        sr.label:SetText(strupper(title) .. colorCode("textFaint") .. (closed and ("   + " .. count) or "   -")
+            .. (hiddenCount > 0 and ("      " .. hiddenCount .. " hidden") or "") .. "|r")
+        sr.label:SetWidth(0) -- the heading may run past the label column
         sr.label:SetTextColor(Theme:Accent())
         sr.toggle = title
+        sr.menu = sectionMenu
         sr:EnableMouse(true)
         y = y - S.sectionH
         if closed then return end
@@ -375,7 +461,8 @@ function Board.Refresh()
             local er = rowPool:Acquire()
             placeRow(er, y, S.rowH)
             er.label:SetPoint("LEFT", S.padding, 0)
-            er.label:SetText(emptyText)
+            er.label:SetWidth(0)
+            er.label:SetText(hiddenCount > 0 and "All rows hidden - right-click the heading to show them" or emptyText)
             er.label:SetTextColor(Theme:Color("textFaint"))
             y = y - S.rowH
             return
@@ -389,8 +476,17 @@ function Board.Refresh()
                 row.label:SetPoint("BOTTOMLEFT", S.padding, 3)
                 row.label:SetText(def.group)
                 row.label:SetTextColor(Theme:Color("textFaint"))
+                row.menu, row.section, row.rowLabel = rowMenu, title, def.group
+                row.groupIds, row.groupLabels = {}, labels
+                for _, id in ipairs(def.children or {}) do
+                    if labels[id] then row.groupIds[#row.groupIds + 1] = id end
+                end
+                row:EnableMouse(true)
                 stripe = 0
             else
+                row.menu, row.section, row.rowId, row.rowLabel = rowMenu, title, def.id or def.label, def.label
+                row:EnableMouse(true)
+                local function openRowMenu() rowMenu(row) end
                 stripe = stripe + 1
                 local h = def.bar and S.barRowH or S.rowH
                 placeRow(row, y, h, "field", stripe % 2 == 0 and 0.6 or 0)
@@ -413,6 +509,7 @@ function Board.Refresh()
                     c.text:SetText(text or "-")
                     c.text:SetTextColor(Theme:Color(text and (colorKey or "text") or "textFaint"))
                     c.tip = tip
+                    c.onRightClick = openRowMenu
                     if def.bar then
                         c.text:SetJustifyH("CENTER")
                         c.text:ClearAllPoints()

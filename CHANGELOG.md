@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+- Hide rows: right-click a row (name or any cell) > Hide row; right-click a reputation group
+  heading > Hide all in <group>. Section headings show "N hidden"; right-click a heading to show
+  hidden rows one by one or all. Saved per section (`settings.hiddenRows`), for all characters.
+- Group headings with no visible rows are left out.
+
 ## 0.4.1
 - Fix: the settings window never opened (color swatches got only one of three color values, the
   build failed silently and left an invisible window). A failed build now cleans up.

@@ -101,13 +101,14 @@ local DEFAULT_SETTINGS = {
     totalIncludesHidden = true,
     launcher = true,
     collapsed = {},            -- board sections folded closed
+    hiddenRows = {},           -- [section][rowId] = label
 }
 
 local function fillDefaults(dst, src)
     for k, v in pairs(src) do
         if dst[k] == nil then
             dst[k] = type(v) == "table" and CopyTable(v) or v
-        elseif type(v) == "table" and type(dst[k]) == "table" and k ~= "collapsed" then
+        elseif type(v) == "table" and type(dst[k]) == "table" and k ~= "collapsed" and k ~= "hiddenRows" then
             fillDefaults(dst[k], v)
         end
     end
