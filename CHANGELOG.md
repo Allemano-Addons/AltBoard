@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+- Reputation cells: centered standing with a thin accent progress bar (like the mockup); tooltip
+  shows exact reputation, percent and how much is left to the next standing.
+
 ## 0.2.0
 - Reputation section: every faction any character has seen, grouped under its header, cells show
   standing (in standing color) + percent, tooltip with exact values. Factions hidden under collapsed

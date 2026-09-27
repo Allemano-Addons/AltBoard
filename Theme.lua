@@ -29,6 +29,7 @@ Theme.colors = {
 Theme.size = {
     titleH = 40,
     rowH = 22,
+    barRowH = 30,
     sectionH = 28,
     headerH = 44,
     labelW = 150,

@@ -33,6 +33,10 @@ local function money(copper)
     return table.concat(parts, " ")
 end
 
+local function num(n)
+    return BreakUpLargeNumbers and BreakUpLargeNumbers(n) or tostring(n)
+end
+
 local function ago(t)
     if not t then return nil end
     local d = time() - t
@@ -167,16 +171,20 @@ local function reputationRows(chars)
                 value = function(c)
                     local rep = c.reps and c.reps[f.id]
                     if not rep or not rep.reaction then return nil end
+                    local name = standingName(rep.reaction)
                     local span = (rep.max or 0) - (rep.min or 0)
                     local into = (rep.cur or 0) - (rep.min or 0)
-                    local text = standingCode(rep.reaction) .. standingName(rep.reaction) .. "|r"
-                    local tip = { rep.name, standingName(rep.reaction) }
+                    local tip = { rep.name, standingCode(rep.reaction) .. name .. "|r" }
+                    local progress = 1
                     if span > 0 and rep.reaction < 8 then
-                        text = text .. " " .. floor(into / span * 100) .. "%"
-                        tip[2] = ("%s  %d / %d"):format(tip[2], into, span)
+                        progress = max(0, min(1, into / span))
+                        tip[#tip + 1] = ("%s / %s  (%d%%)"):format(num(into), num(span), floor(progress * 100))
+                        tip[#tip + 1] = colorCode("textFaint") .. ("%s to %s"):format(num(span - into),
+                            standingName(rep.reaction + 1)) .. "|r"
                     end
-                    return text, "text", tip
+                    return name, "text", tip, progress
                 end,
+                bar = true,
             }
         end
     end
@@ -224,6 +232,16 @@ local function cell(row, i)
         c.mark:SetPoint("BOTTOMLEFT", 4, 0)
         c.mark:SetPoint("BOTTOMRIGHT", -4, 0)
         W.PixelSize(c.mark, c, "h", 2)
+        -- Progress bar (reputation): thin track with an accent fill, under centered text.
+        c.track = c:CreateTexture(nil, "BORDER")
+        c.track:SetPoint("BOTTOMLEFT", 10, 5)
+        c.track:SetPoint("BOTTOMRIGHT", -10, 5)
+        W.PixelSize(c.track, c, "h", 3)
+        c.track:SetColorTexture(Theme:Color("line"))
+        c.fill = c:CreateTexture(nil, "ARTWORK")
+        c.fill:SetPoint("TOPLEFT", c.track)
+        c.fill:SetPoint("BOTTOMLEFT", c.track)
+        c.fill:SetColorTexture(Theme:Accent())
         c:SetScript("OnEnter", function(self) if self.tip then W.ShowTooltip(self, self.tip) end end)
         c:SetScript("OnLeave", W.HideTooltip)
         row.cells[i] = c
@@ -231,6 +249,9 @@ local function cell(row, i)
     c.tip = nil
     c.sub:SetText("")
     c.mark:Hide()
+    c.track:Hide()
+    c.fill:Hide()
+    c.text:SetJustifyH("LEFT")
     c.text:ClearAllPoints()
     c.text:SetPoint("LEFT", 8, 0)
     c.text:SetPoint("RIGHT", -6, 0)
@@ -348,7 +369,8 @@ function Board.Refresh()
                 stripe = 0
             else
                 stripe = stripe + 1
-                placeRow(row, y, S.rowH, "field", stripe % 2 == 0 and 0.6 or 0)
+                local h = def.bar and S.barRowH or S.rowH
+                placeRow(row, y, h, "field", stripe % 2 == 0 and 0.6 or 0)
                 local x = S.padding
                 if def.icon then
                     row.icon:SetTexture(def.icon)
@@ -362,15 +384,27 @@ function Board.Refresh()
                     local e = chars[colOffset + i]
                     local c = cell(row, i)
                     c:SetPoint("TOPLEFT", row, "TOPLEFT", S.labelW + (i - 1) * S.colW, 0)
-                    c:SetSize(S.colW, S.rowH)
-                    local ok, text, colorKey, tip = pcall(def.value, e.data, e.guid == me)
-                    if not ok then text, colorKey, tip = "error", "warn", nil end
+                    c:SetSize(S.colW, h)
+                    local ok, text, colorKey, tip, progress = pcall(def.value, e.data, e.guid == me)
+                    if not ok then text, colorKey, tip, progress = "error", "warn", nil, nil end
                     c.text:SetText(text or "-")
                     c.text:SetTextColor(Theme:Color(text and (colorKey or "text") or "textFaint"))
                     c.tip = tip
+                    if def.bar then
+                        c.text:SetJustifyH("CENTER")
+                        c.text:ClearAllPoints()
+                        c.text:SetPoint("LEFT", 8, progress and 3 or 0)
+                        c.text:SetPoint("RIGHT", -8, progress and 3 or 0)
+                        if progress then
+                            c.track:Show()
+                            local w = S.colW - 20
+                            c.fill:SetWidth(max(0.01, w * progress))
+                            c.fill:SetShown(progress > 0)
+                        end
+                    end
                 end
             end
-            y = y - S.rowH
+            y = y - (def.bar and S.barRowH or S.rowH)
         end
     end
 
