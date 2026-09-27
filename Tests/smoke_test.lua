@@ -86,6 +86,34 @@ LOCALIZED_CLASS_NAMES_MALE = { DRUID = "Druid" }
 FACTION_BAR_COLORS = { [5] = { r = 0, g = 0.6, b = 0.1 } }
 BreakUpLargeNumbers = function(n) return tostring(n) end
 HushDB = { settings = { accent = "C8332E" } }
+-- Gear and stats. Slot 5 (chest) is "not loaded yet" the first time, like a fresh login.
+local chestLoaded = false
+GetInventoryItemLink = function(_, slot)
+    if slot == 1 or slot == 5 or slot == 16 then return "|cff1eff00|Hitem:" .. (100 + slot) .. "::::|h[Item " .. slot .. "]|h|r" end
+end
+GetInventoryItemTexture = function() return 134400 end
+C_Item = {
+    GetItemInfo = function(link)
+        local id = tonumber(link:match("item:(%d+)"))
+        if id == 105 and not chestLoaded then return nil end
+        return "Item " .. (id - 100), link, 2, 20, 18, "Armor", "Cloth", 1, "INVTYPE_CHEST", 134400
+    end,
+    GetDetailedItemLevelInfo = function() return 21 end,
+}
+ITEM_QUALITY_COLORS = { [2] = { r = 0.12, g = 1, b = 0 } }
+UnitStat = function(_, i) return 20, 20 + i, 0, 0 end
+UnitArmor = function() return 300, 350 end
+UnitHealthMax, UnitPowerMax = function() return 400 end, function() return 500 end
+UnitPowerType = function() return 0, "MANA" end
+UnitAttackPower = function() return 60, 10, 0 end
+GetCritChance = function() return 5.123 end
+GetSpellBonusDamage = function(school) return school == 3 and 12 or 0 end
+UnitResistance = function(_, school) return 0, school * 5 end
+GetShapeshiftForm = function() return 0 end
+local tooltipLink
+GameTooltip = setmetatable({ SetHyperlink = function(_, link) tooltipLink = link end }, { __index = function() return function() end end })
+local modifiedClick
+HandleModifiedItemClick = function(link) modifiedClick = link end
 
 -- Load the TOC files in order with the shared addon table.
 local AB = {}
@@ -168,6 +196,55 @@ step("hide an overview row", function()
     assert(#rows == 1, "Location row not found")
     rightClickAndPick(rows[1], 2)
     assert(AB.db.settings.hiddenRows.Overview.Location, "not hidden")
+end)
+
+-- Character sheet.
+step("gear and stats saved", function()
+    local c = AB.db.chars["Player-1-A"]
+    assert(c.gear and c.gear[1] and c.gear[1].name == "Item 1" and c.gear[1].ilvl == 21, "gear slot 1 wrong")
+    assert(c.gear[5] and c.gear[5].name == nil, "chest should wait for item info")
+    chestLoaded = true
+    fire("GET_ITEM_INFO_RECEIVED", 105)
+    assert(c.gear[5].name == "Item 5", "chest not filled in after GET_ITEM_INFO_RECEIVED")
+    assert(c.stats and c.stats.str == 21 and c.stats.armor == 350 and c.stats.ap == 70, "stats wrong")
+    assert(c.stats.sp == 12 and c.stats.res[6] == 30 and c.stats.powerType == "MANA", "spell/res stats wrong")
+end)
+step("druid in bear form keeps caster stats", function()
+    local c = AB.db.chars["Player-1-A"]
+    GetShapeshiftForm = function() return 1 end
+    UnitArmor = function() return 300, 2000 end
+    fire("UNIT_STATS", "player")
+    assert(c.stats.armor == 350, "bear armor was saved")
+    GetShapeshiftForm = function() return 0 end
+    UnitArmor = function() return 300, 350 end
+end)
+step("click name opens the sheet", function()
+    local heads = {}
+    for f, s in pairs(scripts) do
+        if s.OnClick and f._shown and rawget(f, "guid") == "Player-1-A" and rawget(f, "onLeftClick") then heads[#heads + 1] = f end
+    end
+    assert(#heads == 1, "name cell not found (" .. #heads .. ")")
+    scripts[heads[1]].OnClick(heads[1], "LeftButton")
+    local sheet = _G.AltBoardCharFrame
+    assert(sheet and sheet._shown, "sheet not shown")
+    assert(AB.CharSheet.ShownGuid() == "Player-1-A", "wrong character")
+    -- Hover and shift-click an item.
+    local slot
+    for f, s in pairs(scripts) do if rawget(f, "slotId") == 1 then slot = f end end
+    assert(slot and slot.link, "head slot has no link")
+    scripts[slot].OnEnter(slot)
+    assert(tooltipLink == slot.link, "tooltip not shown")
+    scripts[slot].OnClick(slot, "LeftButton")
+    assert(modifiedClick == slot.link, "modified click not passed on")
+    -- Same name again closes it.
+    scripts[heads[1]].OnClick(heads[1], "LeftButton")
+    assert(not sheet._shown, "sheet did not close")
+end)
+step("closing the board closes the sheet", function()
+    AB.CharSheet.Toggle("Player-1-A")
+    assert(_G.AltBoardCharFrame._shown, "sheet not reopened")
+    _G.AltBoardFrame:Hide()
+    assert(not _G.AltBoardCharFrame._shown, "sheet still open")
 end)
 
 print(#errors == 0 and "ALL OK" or (#errors .. " error(s)"))

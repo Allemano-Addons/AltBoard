@@ -37,10 +37,89 @@ local function collectMoney(c)
     c.money = GetMoney()
 end
 
+-- pcall a function that may be missing on this client; nil if missing or failing.
+local function safe(fn, ...)
+    if type(fn) ~= "function" then return nil end
+    local ok, a, b, c, d, e = pcall(fn, ...)
+    if ok then return a, b, c, d, e end
+end
+Data.Safe = safe
+
+local function getItemInfo(link)
+    return safe((C_Item and C_Item.GetItemInfo) or GetItemInfo, link)
+end
+
+-- Equipped items, slots 1-19 (head ... tabard). Name, quality, item level and icon are
+-- saved with the link, so other characters can show them without the item being cached.
+-- Items the client has not loaded yet are filled in when GET_ITEM_INFO_RECEIVED arrives.
+local gearIncomplete = false
+
 local function collectGear(c)
-    if not GetAverageItemLevel then return end
-    local _, equipped = GetAverageItemLevel()
-    c.ilvl = equipped
+    if GetAverageItemLevel then
+        local _, equipped = GetAverageItemLevel()
+        c.ilvl = equipped
+    end
+    local gear, incomplete = {}, false
+    for slot = 1, 19 do
+        local link = safe(GetInventoryItemLink, "player", slot)
+        if link then
+            local name, _, quality, ilvl, _, _, _, _, _, icon = getItemInfo(link)
+            local detailed = safe((C_Item and C_Item.GetDetailedItemLevelInfo) or GetDetailedItemLevelInfo, link)
+            if not name then incomplete = true end
+            gear[slot] = {
+                link = link, name = name, q = quality, ilvl = detailed or ilvl,
+                icon = icon or safe(GetInventoryItemTexture, "player", slot),
+            }
+        end
+    end
+    c.gear = gear
+    gearIncomplete = incomplete
+end
+
+-- Stats as the character sheet shows them at that moment (buffs included). Anything the
+-- client does not offer is simply left out.
+local function collectStats(c)
+    -- Druid forms change stats a lot (bear armor): keep the caster-form values.
+    if c.stats and select(2, UnitClass("player")) == "DRUID" and (safe(GetShapeshiftForm) or 0) > 0 then return end
+    local s = {}
+    for i, key in ipairs({ "str", "agi", "sta", "int", "spi" }) do
+        local _, effective = safe(UnitStat, "player", i)
+        s[key] = effective
+    end
+    local _, armor = safe(UnitArmor, "player")
+    s.armor = armor
+    s.health = safe(UnitHealthMax, "player")
+    s.power = safe(UnitPowerMax, "player")
+    local _, powerToken = safe(UnitPowerType, "player")
+    s.powerType = powerToken
+    local base, pos, neg = safe(UnitAttackPower, "player")
+    if base then s.ap = base + (pos or 0) + (neg or 0) end
+    base, pos, neg = safe(UnitRangedAttackPower, "player")
+    if base then s.rap = base + (pos or 0) + (neg or 0) end
+    s.crit = safe(GetCritChance)
+    s.rcrit = safe(GetRangedCritChance)
+    s.hit = safe(GetHitModifier)
+    s.dodge = safe(GetDodgeChance)
+    s.parry = safe(GetParryChance)
+    s.block = safe(GetBlockChance)
+    local def, defMod = safe(UnitDefense, "player")
+    if def then s.defense = def + (defMod or 0) end
+    -- Spell power and spell crit: the best school (holy .. arcane).
+    for school = 2, 7 do
+        local sp = safe(GetSpellBonusDamage, school)
+        if sp and sp > (s.sp or -1) then s.sp = sp end
+        local sc = safe(GetSpellCritChance, school)
+        if sc and sc > (s.scrit or -1) then s.scrit = sc end
+    end
+    s.heal = safe(GetSpellBonusHealing)
+    s.shit = safe(GetSpellHitModifier)
+    s.res = {}
+    for school = 2, 6 do -- fire, nature, frost, shadow, arcane
+        local _, total = safe(UnitResistance, "player", school)
+        s.res[school] = total
+    end
+    c.stats = s
+    c.statsAt = time()
 end
 
 local function collectZone(c)
@@ -120,6 +199,7 @@ end
 local COLLECTORS = {
     identity = collectIdentity, money = collectMoney, gear = collectGear, zone = collectZone,
     profs = collectProfessions, currency = collectCurrency, reps = collectReputation,
+    stats = collectStats,
 }
 
 -- ---------------------------------------------------------------------------
@@ -139,6 +219,7 @@ local function flush()
     wipe(dirty)
     c.lastSeen = time()
     if AB.Board then AB.Board.Refresh() end
+    if AB.CharSheet then AB.CharSheet.Refresh() end
 end
 
 function Data.Mark(...)
@@ -156,17 +237,31 @@ end
 
 AB:RegisterEvent("PLAYER_LOGIN", function()
     -- Professions and currencies are not always ready at login: again a bit later.
-    Data.Mark("identity", "money", "gear", "zone", "profs", "currency", "reps")
-    AB.Compat.After(5, function() Data.Mark("profs", "currency", "gear", "reps") end)
+    Data.Mark("identity", "money", "gear", "zone", "profs", "currency", "reps", "stats")
+    AB.Compat.After(5, function() Data.Mark("profs", "currency", "gear", "reps", "stats") end)
+end)
+
+-- Stat events carry a unit: only the player's count.
+for _, event in ipairs({ "UNIT_STATS", "UNIT_RESISTANCES", "UNIT_ATTACK_POWER", "UNIT_RANGED_ATTACK_POWER",
+    "UNIT_MAXHEALTH", "UNIT_MAXPOWER", "UNIT_DEFENSE" }) do
+    AB:RegisterEvent(event, function(_, unit) if unit == "player" then Data.Mark("stats") end end)
+end
+for _, event in ipairs({ "COMBAT_RATING_UPDATE", "SPELL_POWER_CHANGED", "PLAYER_DAMAGE_DONE_MODS" }) do
+    AB:RegisterEvent(event, function() Data.Mark("stats") end)
+end
+
+-- Only while some equipped item was not loaded yet (this event fires for every item).
+AB:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()
+    if gearIncomplete then Data.Mark("gear") end
 end)
 
 local EVENTS = {
     PLAYER_MONEY = { "money" },
-    PLAYER_LEVEL_UP = { "identity" },
+    PLAYER_LEVEL_UP = { "identity", "stats" },
     PLAYER_XP_UPDATE = { "identity" },
     UPDATE_EXHAUSTION = { "identity" },
     PLAYER_GUILD_UPDATE = { "identity" },
-    PLAYER_EQUIPMENT_CHANGED = { "gear" },
+    PLAYER_EQUIPMENT_CHANGED = { "gear", "stats" },
     ZONE_CHANGED_NEW_AREA = { "zone" },
     SKILL_LINES_CHANGED = { "profs" },
     TRADE_SKILL_LIST_UPDATE = { "profs" },

@@ -309,7 +309,9 @@ local function cell(row, i)
         c:SetScript("OnClick", function(self, button)
             if button == "RightButton" and self.onRightClick then
                 W.HideTooltip()
-                AB:Call("character menu", self.onRightClick, self)
+                AB:Call("right-click", self.onRightClick, self)
+            elseif button == "LeftButton" and self.onLeftClick then
+                AB:Call("left-click", self.onLeftClick, self)
             end
         end)
         c:SetScript("OnEnter", function(self) if self.tip then W.ShowTooltip(self, self.tip) end end)
@@ -317,7 +319,7 @@ local function cell(row, i)
         row.cells[i] = c
     end
     c.tip = nil
-    c.onRightClick = nil
+    c.onRightClick, c.onLeftClick = nil, nil
     c:SetAlpha(1)
     c.sub:SetText("")
     c.mark:Hide()
@@ -413,10 +415,18 @@ function Board.Refresh()
             ("Level %s %s %s"):format(cd.level or "?", cd.race or "", cd.class and (LOCALIZED_CLASS_NAMES_MALE or {})[cd.class] or ""),
         }
         if cd.guild then tip[#tip + 1] = "<" .. cd.guild .. ">" end
+        tip[#tip + 1] = colorCode("textFaint") .. "Left-click: gear & stats|r"
         tip[#tip + 1] = colorCode("textFaint") .. "Right-click: move, hide, delete|r"
         c.tip = tip
         c.guid = e.guid
         c.onRightClick = Board.CharacterMenu
+        c.onLeftClick = function(self) AB.CharSheet.Toggle(self.guid) end
+        -- The character whose sheet is open gets an accent sub-line.
+        if AB.CharSheet.ShownGuid() == e.guid then
+            c.sub:SetTextColor(Theme:Accent())
+        else
+            c.sub:SetTextColor(Theme:Color("textFaint"))
+        end
     end
     y = y - S.headerH
 
@@ -693,6 +703,7 @@ local function build()
     frame:SetScript("OnHide", function()
         W.HideTooltip()
         W.CloseMenus()
+        AB.CharSheet.Hide()
     end)
     frame:Hide()
     Board.ApplyLook()

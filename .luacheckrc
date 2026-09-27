@@ -7,7 +7,7 @@ exclude_files = { "Tests/**" }
 globals = {
     "AltBoardDB",
     "SLASH_ALTBOARD1", "SLASH_ALTBOARD2",
-    "SlashCmdList", "AltBoardFrame", "AltBoardSettingsFrame",
+    "SlashCmdList", "AltBoardFrame", "AltBoardSettingsFrame", "AltBoardCharFrame",
 }
 
 -- WoW API used by AltBoard (read-only). Extend as new APIs are used.
@@ -26,5 +26,10 @@ read_globals = {
     "C_Spell", "C_TradeSkillUI", "GetNumFactions", "GetFactionInfo", "C_Reputation", "FACTION_BAR_COLORS",
     "HushDB", "UISpecialFrames", "GetCursorPosition", "LibStub", "unpack", "BreakUpLargeNumbers", "IsShiftKeyDown", "IsInGuild", "UnitXP", "UnitXPMax",
     "GetProfessionInfo", "CUSTOM_CLASS_COLORS", "RAID_CLASS_COLORS", "LOCALIZED_CLASS_NAMES_MALE", "GetPhysicalScreenSize",
+    "GetInventoryItemLink", "GetInventoryItemTexture", "C_Item", "GetItemInfo", "GetDetailedItemLevelInfo",
+    "UnitStat", "UnitArmor", "UnitHealthMax", "UnitPowerMax", "UnitPowerType", "UnitAttackPower", "UnitRangedAttackPower",
+    "GetCritChance", "GetRangedCritChance", "GetHitModifier", "GetDodgeChance", "GetParryChance", "GetBlockChance",
+    "UnitDefense", "GetSpellBonusDamage", "GetSpellBonusHealing", "GetSpellCritChance", "GetSpellHitModifier",
+    "UnitResistance", "GetShapeshiftForm", "ITEM_QUALITY_COLORS", "HandleModifiedItemClick", "ChatEdit_InsertLink",
     "C_CurrencyInfo", "GetCurrencyListSize", "GetCurrencyListInfo", "GetHonorCurrency", "GetPVPLifetimeStats",
 }

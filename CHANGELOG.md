@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+- Character sheet: left-click a name on the board. Equipped items (icon, quality color, item
+  level; hover = the real item tooltip, shift-click links it) and stats (attributes, melee &
+  ranged, spell, resistances). Opens next to the board, follows its scale and opacity.
+- Gear (links + name/quality/ilvl/icon) and stats are saved per character on equipment and
+  stat events. Druids keep their caster-form stats while shapeshifted.
+
 ## 0.5.0
 - Hide rows: right-click a row (name or any cell) > Hide row; right-click a reputation group
   heading > Hide all in <group>. Section headings show "N hidden"; right-click a heading to show

@@ -13,6 +13,7 @@ then restart the game. Log in once on each character so AltBoard can read it.
 - Right-click a character name: move left/right, hide, delete.
 - Right-click a row: hide it. Right-click a section heading: show hidden rows.
 - Left-click a section heading: fold it.
+- Left-click a character name: its gear and stats (hover an item for the tooltip, shift-click to link).
 - Gear button or `/ab settings`: font, text size, accent color, opacity, scale, column width,
   sections, launcher.
 - Something not working? `/ab errors` lists recent errors (WoW Forever hides Lua errors).
