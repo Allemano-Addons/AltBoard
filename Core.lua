@@ -63,12 +63,49 @@ end)
 -- SavedVariables: read at ADDON_LOADED, never at file load (WoW Forever quirk).
 -- ---------------------------------------------------------------------------
 
+local DEFAULT_SETTINGS = {
+    font = "Friz Quadrata",
+    textSize = "M",            -- S / M / L
+    accentMode = "hush",       -- hush (follow Hush if installed) / class / custom
+    accent = "3FC7EB",         -- used by "custom"
+    bgAlpha = 0.96,
+    scale = 1,
+    colWidth = "normal",       -- narrow / normal / wide
+    sections = { Overview = true, Professions = true, Currency = true, Reputation = true },
+    totalIncludesHidden = true,
+    launcher = true,
+    collapsed = {},            -- board sections folded closed
+}
+
+local function fillDefaults(dst, src)
+    for k, v in pairs(src) do
+        if dst[k] == nil then
+            dst[k] = type(v) == "table" and CopyTable(v) or v
+        elseif type(v) == "table" and type(dst[k]) == "table" and k ~= "collapsed" then
+            fillDefaults(dst[k], v)
+        end
+    end
+end
+
+-- Settings changes: listeners get (key, value). A failing listener never stops the others.
+local settingListeners = {}
+function AB:OnSettingChanged(fn) settingListeners[#settingListeners + 1] = fn end
+
+function AB:SetSetting(key, value)
+    self.db.settings[key] = value
+    for _, fn in ipairs(settingListeners) do
+        local ok, err = pcall(fn, key, value)
+        if not ok then geterrorhandler()(err) end
+    end
+end
+
 local function initDB()
     if type(AltBoardDB) ~= "table" then AltBoardDB = {} end
     local db = AltBoardDB
     db.schema = db.schema or AB.SCHEMA
     db.settings = db.settings or {}
-    db.settings.collapsed = db.settings.collapsed or {} -- board sections folded closed
+    fillDefaults(db.settings, DEFAULT_SETTINGS)
+    db.launcher = db.launcher or {}
     db.chars = db.chars or {} -- keyed by player GUID
     db.window = db.window or {}
     AB.db = db
@@ -98,7 +135,7 @@ end
 
 function AB:Toggle()
     -- Replaced once the board window exists.
-    self:Print("The board arrives in v0.1. Try /altboard probe")
+    self:Print("The board is not ready yet.")
 end
 
 AB:AddSlashCommand("version", function() AB:Print("v" .. tostring(AB.version)) end, "show version")

@@ -282,7 +282,7 @@ end
 
 local function visibleColumns(total)
     local screenW = UIParent:GetWidth() * 0.92
-    local fit = max(1, floor((screenW - S.labelW) / S.colW))
+    local fit = max(1, floor((screenW - S.labelW) / Theme:ColumnWidth()))
     return min(total, fit)
 end
 
@@ -303,10 +303,10 @@ function Board.Refresh()
     local chars = Data.Characters(Board.showHidden)
     local nVis = visibleColumns(#chars)
     colOffset = max(0, min(colOffset, #chars - nVis))
-    local width = S.labelW + nVis * S.colW
+    local width = max(380, S.labelW + nVis * Theme:ColumnWidth()) -- room for the title bar
     frame:SetWidth(Theme:Snap(width, frame))
 
-    local total = money(Data.TotalMoney()) or "0"
+    local total = money(Data.TotalMoney(AB.db.settings.totalIncludesHidden)) or "0"
     frame.total:SetText(total)
     if hiddenCount > 0 then
         frame.hiddenBtn.text:SetText(Board.showHidden and "hide hidden" or (hiddenCount .. " hidden"))
@@ -330,8 +330,8 @@ function Board.Refresh()
     for i = 1, nVis do
         local e = chars[colOffset + i]
         local c, cd = cell(header, i), e.data
-        c:SetPoint("TOPLEFT", header, "TOPLEFT", S.labelW + (i - 1) * S.colW, 0)
-        c:SetSize(S.colW, S.headerH)
+        c:SetPoint("TOPLEFT", header, "TOPLEFT", S.labelW + (i - 1) * Theme:ColumnWidth(), 0)
+        c:SetSize(Theme:ColumnWidth(), S.headerH)
         c.text:ClearAllPoints()
         c.text:SetPoint("TOPLEFT", 8, -9)
         c.text:SetPoint("RIGHT", -6, 0)
@@ -406,8 +406,8 @@ function Board.Refresh()
                 for i = 1, nVis do
                     local e = chars[colOffset + i]
                     local c = cell(row, i)
-                    c:SetPoint("TOPLEFT", row, "TOPLEFT", S.labelW + (i - 1) * S.colW, 0)
-                    c:SetSize(S.colW, h)
+                    c:SetPoint("TOPLEFT", row, "TOPLEFT", S.labelW + (i - 1) * Theme:ColumnWidth(), 0)
+                    c:SetSize(Theme:ColumnWidth(), h)
                     local ok, text, colorKey, tip, progress = pcall(def.value, e.data, e.guid == me)
                     if not ok then text, colorKey, tip, progress = "error", "warn", nil, nil end
                     c.text:SetText(text or "-")
@@ -420,8 +420,9 @@ function Board.Refresh()
                         c.text:SetPoint("RIGHT", -8, progress and 3 or 0)
                         if progress then
                             c.track:Show()
-                            local w = S.colW - 20
+                            local w = Theme:ColumnWidth() - 20
                             c.fill:SetWidth(max(0.01, w * progress))
+                            c.fill:SetColorTexture(Theme:Accent())
                             c.fill:SetShown(progress > 0)
                         end
                     end
@@ -431,10 +432,11 @@ function Board.Refresh()
         end
     end
 
-    section("Overview", OVERVIEW)
-    section("Professions", professionRows(chars), "No professions seen yet")
-    section("Currency", currencyRows(chars), "No currencies yet")
-    section("Reputation", reputationRows(chars), "No reputations seen yet")
+    local shown = AB.db.settings.sections
+    if shown.Overview then section("Overview", OVERVIEW) end
+    if shown.Professions then section("Professions", professionRows(chars), "No professions seen yet") end
+    if shown.Currency then section("Currency", currencyRows(chars), "No currencies yet") end
+    if shown.Reputation then section("Reputation", reputationRows(chars), "No reputations seen yet") end
 
     -- Height follows the content, up to 85% of the screen; the rest scrolls.
     local contentH = scrollY - y
@@ -510,7 +512,7 @@ local function build()
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
     frame:EnableMouse(true)
-    frame:SetSize(S.labelW + S.colW, 200)
+    frame:SetSize(S.labelW + Theme:ColumnWidth(), 200)
     frame.bg = W.Fill(frame, "window", 0.96)
     frame.bg:SetAllPoints()
     W.Border(frame, "line")
@@ -535,13 +537,15 @@ local function build()
     local accent = title:CreateTexture(nil, "ARTWORK")
     accent:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)
     accent:SetSize(18, 2)
-    accent:SetColorTexture(Theme:Accent())
+    W.OnAccent(function(r, g, b) accent:SetColorTexture(r, g, b, 1) end)
 
     local close = W.CloseButton(title, function() frame:Hide() end)
     close:SetPoint("RIGHT", -8, 0)
+    local gear = W.SettingsButton(title, "Settings", function() AB.Settings.Toggle() end)
+    gear:SetPoint("RIGHT", close, "LEFT", -2, 0)
 
     frame.total = W.Text(title, 0, "text")
-    frame.total:SetPoint("RIGHT", close, "LEFT", -10, 0)
+    frame.total:SetPoint("RIGHT", gear, "LEFT", -10, 0)
     -- "N hidden": shows hidden characters (dimmed) until clicked again. Not saved.
     local hb = CreateFrame("Button", nil, title)
     hb:SetHeight(22)
@@ -594,7 +598,23 @@ local function build()
         W.CloseMenus()
     end)
     frame:Hide()
+    Board.ApplyLook()
     restorePosition()
+end
+
+-- Background opacity and window scale from the settings.
+function Board.ApplyLook()
+    if not frame then return end
+    local s = AB.db.settings
+    frame.bg:SetAlpha(s.bgAlpha or 0.96)
+    frame:SetScale(s.scale or 1)
+end
+
+function Board.Frame() return frame end
+
+function Board.ResetPosition()
+    AB.db.window.left, AB.db.window.top = nil, nil
+    if frame then restorePosition() end
 end
 
 function Board.Toggle()
@@ -602,5 +622,20 @@ function Board.Toggle()
     if not frame then build() end
     frame:SetShown(not frame:IsShown())
 end
+
+function Board.Show()
+    if not AB.db then return end
+    if not frame then build() end
+    frame:Show()
+end
+
+AB:OnSettingChanged(function(key)
+    if not frame then return end
+    if key == "bgAlpha" or key == "scale" then
+        Board.ApplyLook()
+        if key == "scale" then restorePosition() end
+    end
+    Board.Refresh()
+end)
 
 AB.Toggle = function() Board.Toggle() end

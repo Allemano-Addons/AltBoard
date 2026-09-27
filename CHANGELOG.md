@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+- Settings window (gear button in the title bar, `/ab settings`): font (game fonts + fonts other
+  addons share via LibSharedMedia), text size, accent (follow Hush / class / custom presets),
+  background opacity, window scale, column width, which sections show, whether hidden characters
+  count in the gold total, launcher on/off + lock, reset window positions. All apply at once.
+- Launcher button (own, movable, Hush style): left-click opens the board, right-click menu.
+
 ## 0.3.0
 - Character management: right-click a name for Move left / Move right / Hide / Delete (with confirm;
   not the logged-in character). Once moved, the order is saved (`AltBoardDB.order`), new characters

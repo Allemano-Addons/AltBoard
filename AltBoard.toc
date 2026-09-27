@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: AltBoard
 ## Notes: Overview of all your characters: gold, professions, currency, reputation
-## Version: 0.3.0
+## Version: 0.4.0
 ## SavedVariables: AltBoardDB
 ## OptionalDeps: Hush
 
@@ -11,4 +11,6 @@ Theme.lua
 Widgets.lua
 Data.lua
 UI\Board.lua
+UI\Settings.lua
+UI\Launcher.lua
 Probe.lua

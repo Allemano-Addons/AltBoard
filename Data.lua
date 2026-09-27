@@ -256,8 +256,10 @@ function Data.Delete(guid)
     end
 end
 
-function Data.TotalMoney()
+function Data.TotalMoney(includeHidden)
     local total = 0
-    for _, c in pairs(AB.db and AB.db.chars or {}) do total = total + (c.money or 0) end
+    for _, c in pairs(AB.db and AB.db.chars or {}) do
+        if includeHidden or not c.hidden then total = total + (c.money or 0) end
+    end
     return total
 end

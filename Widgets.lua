@@ -56,14 +56,42 @@ function W.Border(frame, colorKey)
     return b
 end
 
+-- Every text is registered so a font / size change applies at once.
+local fontItems = {}
+
 function W.Text(parent, delta, colorKey, layer)
     local fs = parent:CreateFontString(nil, layer or "OVERLAY")
     Theme:SetFont(fs, delta)
     fs:SetTextColor(Theme:Color(colorKey or "text"))
     fs:SetJustifyH("LEFT")
     fs:SetWordWrap(false)
+    fontItems[#fontItems + 1] = { fs = fs, delta = delta }
     return fs
 end
+
+function W.RefreshFonts()
+    for i = 1, #fontItems do Theme:SetFont(fontItems[i].fs, fontItems[i].delta) end
+end
+
+-- Accent: fn(r, g, b) now and on every accent change.
+local accentFns = {}
+function W.OnAccent(fn)
+    accentFns[#accentFns + 1] = fn
+    fn(Theme:Accent())
+end
+
+function W.ApplyAccent()
+    local r, g, b = Theme:Accent()
+    for i = 1, #accentFns do accentFns[i](r, g, b) end
+end
+
+AB:OnSettingChanged(function(key)
+    if key == "font" or key == "textSize" then
+        W.RefreshFonts()
+    elseif key == "accentMode" or key == "accent" then
+        W.ApplyAccent()
+    end
+end)
 
 -- Own flat tooltip. lines = string or { "line", "line", ... }.
 local tip
@@ -114,6 +142,222 @@ function W.CloseButton(parent, onClick)
     end)
     b:SetScript("OnClick", onClick)
     return b
+end
+
+-- Square title-bar button with Hush's "settings" icon (three sliders drawn from rects).
+function W.SettingsButton(parent, tooltip, onClick)
+    local b = CreateFrame("Button", nil, parent)
+    b:SetSize(24, 24)
+    b.bg = W.Fill(b, "selected", 1)
+    b.bg:SetAllPoints()
+    b.bg:Hide()
+    local box = CreateFrame("Frame", nil, b)
+    box:SetSize(10, 10)
+    box:SetPoint("CENTER")
+    b.parts = {}
+    for _, row in ipairs({ { y = 1, knob = 2 }, { y = 5, knob = 6 }, { y = 9, knob = 4 } }) do
+        local bar = box:CreateTexture(nil, "ARTWORK")
+        bar:SetPoint("TOPLEFT", 0, -row.y)
+        bar:SetSize(10, 1)
+        local knob = box:CreateTexture(nil, "ARTWORK")
+        knob:SetPoint("TOPLEFT", row.knob - 1, -(row.y - 2))
+        knob:SetSize(2, 5)
+        b.parts[#b.parts + 1] = bar
+        b.parts[#b.parts + 1] = knob
+    end
+    local function color(key)
+        local r, g, bl = Theme:Color(key)
+        for _, p in ipairs(b.parts) do p:SetColorTexture(r, g, bl, 1) end
+    end
+    color("textDim")
+    b:SetScript("OnEnter", function(self)
+        self.bg:Show()
+        color("text")
+        if tooltip then W.ShowTooltip(self, tooltip) end
+    end)
+    b:SetScript("OnLeave", function(self)
+        self.bg:Hide()
+        color("textDim")
+        W.HideTooltip()
+    end)
+    b:SetScript("OnClick", onClick)
+    return b
+end
+
+-- ---------------------------------------------------------------------------
+-- Settings controls (same look as Hush's).
+-- ---------------------------------------------------------------------------
+
+function W.Toggle(parent, onChange)
+    local t = CreateFrame("Button", nil, parent)
+    t:SetSize(32, 16)
+    t.track = t:CreateTexture(nil, "BACKGROUND")
+    t.track:SetAllPoints()
+    t.knob = t:CreateTexture(nil, "ARTWORK")
+    t.knob:SetSize(12, 12)
+    function t:Set(on)
+        self.value = on and true or false
+        self.knob:ClearAllPoints()
+        if self.value then
+            self.track:SetColorTexture(Theme:Accent())
+            self.knob:SetColorTexture(Theme:Color("sidebar"))
+            self.knob:SetPoint("RIGHT", -2, 0)
+        else
+            self.track:SetColorTexture(Theme:Color("line"))
+            self.knob:SetColorTexture(Theme:Color("textDim"))
+            self.knob:SetPoint("LEFT", 2, 0)
+        end
+    end
+    W.OnAccent(function() if t.value ~= nil then t:Set(t.value) end end)
+    t:SetScript("OnClick", function(self)
+        self:Set(not self.value)
+        if onChange then onChange(self.value) end
+    end)
+    t:Set(false)
+    return t
+end
+
+-- options: { { value = "S", label = "S" }, ... }
+function W.Segment(parent, options, onChange)
+    local s = CreateFrame("Frame", nil, parent)
+    s:SetHeight(24)
+    s.buttons = {}
+    local x = 0
+    for i, opt in ipairs(options) do
+        local b = CreateFrame("Button", nil, s)
+        b.value = opt.value
+        b.bg = W.Fill(b, "field", 1)
+        b.bg:SetAllPoints()
+        b.text = W.Text(b, -1, "textDim")
+        b.text:SetPoint("CENTER")
+        b.text:SetText(opt.label)
+        local w = max(40, b.text:GetStringWidth() + 20)
+        b:SetSize(w, 24)
+        b:SetPoint("LEFT", x, 0)
+        x = x + w + 2
+        b:SetScript("OnClick", function(self)
+            s:Set(self.value)
+            if onChange then onChange(self.value) end
+        end)
+        b:SetScript("OnEnter", function(self) if self.value ~= s.value then self.text:SetTextColor(Theme:Color("text")) end end)
+        b:SetScript("OnLeave", function() s:Set(s.value) end)
+        s.buttons[i] = b
+    end
+    s:SetWidth(x - 2)
+    W.Border(s, "line")
+    function s:Set(value)
+        self.value = value
+        local r, g, bl = Theme:Accent()
+        for _, b in ipairs(self.buttons) do
+            if b.value == value then
+                b.bg:SetColorTexture(r, g, bl, 1)
+                b.text:SetTextColor(Theme:Color("sidebar"))
+            else
+                b.bg:SetColorTexture(Theme:Color("field"))
+                b.text:SetTextColor(Theme:Color("textDim"))
+            end
+        end
+    end
+    W.OnAccent(function() if s.value ~= nil then s:Set(s.value) end end)
+    return s
+end
+
+-- Horizontal slider. format(value) -> label text.
+function W.Slider(parent, minV, maxV, step, width, format, onChange)
+    local s = CreateFrame("Slider", nil, parent)
+    s:SetOrientation("HORIZONTAL")
+    s:SetSize(width or 200, 16)
+    s:SetMinMaxValues(minV, maxV)
+    s:SetValueStep(step)
+    if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
+    s.track = W.Fill(s, "line", 1, "BACKGROUND")
+    s.track:SetPoint("LEFT")
+    s.track:SetPoint("RIGHT")
+    s.track:SetHeight(2)
+    local thumb = s:CreateTexture(nil, "OVERLAY")
+    thumb:SetSize(10, 16)
+    s:SetThumbTexture(thumb)
+    W.OnAccent(function(r, g, b) thumb:SetColorTexture(r, g, b, 1) end)
+    s.label = W.Text(s, -1, "textDim")
+    s.label:SetPoint("LEFT", s, "RIGHT", 10, 0)
+    s.silent = false
+    s:SetScript("OnValueChanged", function(self, value)
+        value = floor(value / step + 0.5) * step
+        self.label:SetText(format and format(value) or tostring(value))
+        if not self.silent and onChange then onChange(value) end
+    end)
+    s:EnableMouseWheel(false)
+    function s:Set(value)
+        self.silent = true
+        self:SetValue(value)
+        self.label:SetText(format and format(value) or tostring(value))
+        self.silent = false
+    end
+    return s
+end
+
+-- Dropdown: a field-styled button that opens a menu below itself.
+-- getOptions() -> { { value, label, font = path (optional preview) }, ... }
+function W.Dropdown(parent, width, getOptions, onChange)
+    local d = CreateFrame("Button", nil, parent)
+    d:SetSize(width or 200, 26)
+    d.bg = W.Fill(d, "field", 1)
+    d.bg:SetAllPoints()
+    d.border = W.Border(d, "line")
+    d.text = W.Text(d, 0, "text")
+    d.text:SetPoint("LEFT", 10, 0)
+    d.text:SetWidth((width or 200) - 30)
+    d.arrow = W.Text(d, -2, "textDim")
+    d.arrow:SetPoint("RIGHT", -10, 0)
+    d.arrow:SetText("v")
+
+    function d:Set(value)
+        self.value = value
+        local label = tostring(value)
+        for _, opt in ipairs(getOptions()) do
+            if opt.value == value then label = opt.label break end
+        end
+        self.text:SetText(label)
+    end
+
+    local function setBorder(key)
+        local r, g, b = Theme:Color(key)
+        for _, side in pairs(d.border) do side:SetColorTexture(r, g, b, 1) end
+    end
+    d:SetScript("OnEnter", function() setBorder("textFaint") end)
+    d:SetScript("OnLeave", function() setBorder("line") end)
+    d:SetScript("OnClick", function(self)
+        if W.IsMenuOpen() then W.CloseMenus() return end
+        local items = {}
+        for _, opt in ipairs(getOptions()) do
+            items[#items + 1] = {
+                text = opt.label, font = opt.font, checked = opt.value == self.value,
+                onClick = function()
+                    self:Set(opt.value)
+                    if onChange then onChange(opt.value) end
+                end,
+            }
+        end
+        W.OpenMenu(items, self)
+    end)
+    return d
+end
+
+-- Square color swatch with a selection ring.
+function W.Swatch(parent, r, g, b, onClick)
+    local s = CreateFrame("Button", nil, parent)
+    s:SetSize(22, 22)
+    s.ring = W.Border(s, "line")
+    s.fill = s:CreateTexture(nil, "ARTWORK")
+    s.fill:SetPoint("TOPLEFT", 3, -3)
+    s.fill:SetPoint("BOTTOMRIGHT", -3, 3)
+    s.fill:SetColorTexture(r, g, b, 1)
+    function s:SetSelected(on)
+        local cr, cg, cb = Theme:Color(on and "text" or "line")
+        for _, side in pairs(self.ring) do side:SetColorTexture(cr, cg, cb, 1) end
+    end
+    s:SetScript("OnClick", function() if onClick then onClick() end end)
+    return s
 end
 
 -- ---------------------------------------------------------------------------
@@ -167,7 +411,10 @@ local function menuButton(parent)
     return b
 end
 
--- items = { { text, onClick, disabled, danger, title } }. Title items are faint headings.
+function W.IsMenuOpen() return menu ~= nil and menu:IsShown() end
+
+-- items = { { text, onClick, disabled, danger, title, checked, font } }. Title items are
+-- faint headings, checked items use the accent, font previews the item in that font.
 function W.OpenMenu(items, anchor)
     closeAll()
     getCatcher()
@@ -180,12 +427,18 @@ function W.OpenMenu(items, anchor)
     for i, item in ipairs(items) do
         local b = menu.buttons[i] or menuButton(menu)
         menu.buttons[i] = b
-        b:ClearAllPoints()
-        b:SetPoint("TOPLEFT", 1, -4 - (i - 1) * 22)
-        b:SetPoint("RIGHT", -1, 0)
+        if item.font then
+            b.text:SetFont(item.font, Theme:TextSize(), "")
+        else
+            Theme:SetFont(b.text)
+        end
         b.text:SetText(item.text)
-        local key = item.title and "textFaint" or item.disabled and "textFaint" or item.danger and "warn" or "text"
-        b.text:SetTextColor(Theme:Color(key))
+        if item.checked then
+            b.text:SetTextColor(Theme:Accent())
+        else
+            local key = item.title and "textFaint" or item.disabled and "textFaint" or item.danger and "warn" or "text"
+            b.text:SetTextColor(Theme:Color(key))
+        end
         b:SetEnabled(not item.disabled and not item.title)
         b:SetScript("OnClick", function()
             closeAll()
@@ -195,9 +448,25 @@ function W.OpenMenu(items, anchor)
         width = max(width, b.text:GetStringWidth() + 30)
     end
     for i = #items + 1, #menu.buttons do menu.buttons[i]:Hide() end
-    menu:SetSize(width, #items * 22 + 8)
+    -- Long lists (many fonts) wrap into columns of at most 18 rows.
+    local perCol = min(#items, 18)
+    local cols = ceil(#items / perCol)
+    for i = 1, #items do
+        local b = menu.buttons[i]
+        local col, row = floor((i - 1) / perCol), (i - 1) % perCol
+        b:ClearAllPoints()
+        b:SetPoint("TOPLEFT", 1 + col * width, -4 - row * 22)
+        b:SetWidth(width - 2)
+    end
+    menu:SetSize(width * cols, perCol * 22 + 8)
     menu:ClearAllPoints()
-    menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
+    if anchor then
+        menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
+    else
+        local x, y = GetCursorPosition()
+        local s = UIParent:GetEffectiveScale()
+        menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / s, y / s)
+    end
     menu:Show()
 end
 

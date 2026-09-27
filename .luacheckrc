@@ -6,7 +6,7 @@ self = false
 globals = {
     "AltBoardDB",
     "SLASH_ALTBOARD1", "SLASH_ALTBOARD2",
-    "SlashCmdList", "AltBoardFrame",
+    "SlashCmdList", "AltBoardFrame", "AltBoardSettingsFrame",
 }
 
 -- WoW API used by AltBoard (read-only). Extend as new APIs are used.
@@ -23,7 +23,7 @@ read_globals = {
     "GetSavedInstanceChatLink", "GetNumSavedWorldBosses", "GetSavedWorldBossInfo",
     "GetProfessions", "GetNumSkillLines", "GetSkillLineInfo", "IsSpellKnown", "GetSpellInfo", "GetSpellCooldown",
     "C_Spell", "C_TradeSkillUI", "GetNumFactions", "GetFactionInfo", "C_Reputation", "FACTION_BAR_COLORS",
-    "HushDB", "UISpecialFrames", "unpack", "BreakUpLargeNumbers", "IsShiftKeyDown", "IsInGuild", "UnitXP", "UnitXPMax",
+    "HushDB", "UISpecialFrames", "GetCursorPosition", "LibStub", "unpack", "BreakUpLargeNumbers", "IsShiftKeyDown", "IsInGuild", "UnitXP", "UnitXPMax",
     "GetProfessionInfo", "CUSTOM_CLASS_COLORS", "RAID_CLASS_COLORS", "LOCALIZED_CLASS_NAMES_MALE", "GetPhysicalScreenSize",
     "C_CurrencyInfo", "GetCurrencyListSize", "GetCurrencyListInfo", "GetHonorCurrency", "GetPVPLifetimeStats",
 }
