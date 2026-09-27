@@ -3,6 +3,7 @@
 local addonName, AB = ...
 
 AB.name = addonName
+AB.LOGO = "Interface\\AddOns\\" .. addonName .. "\\Media\\logo" -- 64x64 TGA (Media/logo.png is the source)
 AB.SCHEMA = 1
 
 function AB:Print(...)

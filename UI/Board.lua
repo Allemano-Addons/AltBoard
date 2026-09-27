@@ -645,7 +645,16 @@ local function build()
     end)
 
     local name = W.Text(title, 3, "text")
-    name:SetPoint("LEFT", S.padding, 0)
+    -- Logo left of the name (the name moves back to the edge if the texture fails).
+    local logo = title:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(22, 22)
+    logo:SetPoint("LEFT", S.padding - 2, 0)
+    if logo:SetTexture(AB.LOGO) == false then
+        logo:Hide()
+        name:SetPoint("LEFT", S.padding, 0)
+    else
+        name:SetPoint("LEFT", logo, "RIGHT", 5, 0)
+    end
     name:SetText("AltBoard")
     local accent = title:CreateTexture(nil, "ARTWORK")
     accent:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -3)

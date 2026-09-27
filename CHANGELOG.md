@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.2
+- AltBoard logo: shown in the game's addon list (IconTexture), on the launcher button and next to
+  the title. Media/logo.tga (64x64) is made from Media/logo.png; the launcher falls back to the
+  drawn columns if the texture does not load.
+
 ## 0.7.1
 - Fix: "attempt to perform arithmetic on ... a secret number value" when stats changed in
   combat. WoW Forever hides some values (attack power...) from addons during combat; stats are

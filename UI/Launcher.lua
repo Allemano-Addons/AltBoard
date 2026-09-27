@@ -65,17 +65,23 @@ local function build()
         for _, side in pairs(border) do side:SetColorTexture(r, g, b, 1) end
     end
 
-    -- Icon: three columns of different height (a board of characters).
-    local bars = {}
-    for i, h in ipairs({ 8, 13, 10 }) do
-        local t = button:CreateTexture(nil, "ARTWORK")
-        t:SetSize(4, h)
-        t:SetPoint("BOTTOMLEFT", 7 + (i - 1) * 6, 8)
-        bars[i] = t
+    -- Icon: the AltBoard logo; if the texture does not load, three accent-colored columns.
+    local logo = button:CreateTexture(nil, "ARTWORK")
+    logo:SetPoint("TOPLEFT", 2, -2)
+    logo:SetPoint("BOTTOMRIGHT", -2, 2)
+    if logo:SetTexture(AB.LOGO) == false then
+        logo:Hide()
+        local bars = {}
+        for i, h in ipairs({ 8, 13, 10 }) do
+            local t = button:CreateTexture(nil, "ARTWORK")
+            t:SetSize(4, h)
+            t:SetPoint("BOTTOMLEFT", 7 + (i - 1) * 6, 8)
+            bars[i] = t
+        end
+        W.OnAccent(function(r, g, b)
+            for _, t in ipairs(bars) do t:SetColorTexture(r, g, b, 1) end
+        end)
     end
-    W.OnAccent(function(r, g, b)
-        for _, t in ipairs(bars) do t:SetColorTexture(r, g, b, 1) end
-    end)
 
     button:SetScript("OnEnter", function(self)
         setBorder(Theme:Accent())

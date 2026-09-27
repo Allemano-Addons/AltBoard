@@ -1,9 +1,10 @@
 ## Interface: 16001
 ## Title: AltBoard
 ## Notes: Overview of all your characters: gold, professions, currency, reputation, gear, bags and bank
-## Version: 0.7.1
+## Version: 0.7.2
 ## SavedVariables: AltBoardDB
 ## OptionalDeps: Hush
+## IconTexture: Interface\AddOns\AltBoard\Media\logo
 
 Core.lua
 Compat.lua
