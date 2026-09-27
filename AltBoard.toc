@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: AltBoard
+## Notes: Overview of all your characters: lockouts, professions, reputation
+## Version: 0.0.1
+## SavedVariables: AltBoardDB
+
+Core.lua
+Compat.lua
+Probe.lua
