@@ -23,4 +23,5 @@ read_globals = {
     "GetSavedInstanceChatLink", "GetNumSavedWorldBosses", "GetSavedWorldBossInfo",
     "GetProfessions", "GetNumSkillLines", "GetSkillLineInfo", "IsSpellKnown", "GetSpellInfo", "GetSpellCooldown",
     "C_Spell", "C_TradeSkillUI", "GetNumFactions", "GetFactionInfo", "C_Reputation",
+    "C_CurrencyInfo", "GetCurrencyListSize", "GetCurrencyListInfo", "GetHonorCurrency", "GetPVPLifetimeStats",
 }

@@ -35,7 +35,7 @@ local API_NAMES = {
     -- reputation
     "GetNumFactions", "GetFactionInfo", "GetFactionInfoByID", "C_Reputation", "ExpandFactionHeader",
     -- misc
-    "C_CurrencyInfo", "GetNumTitles", "C_Map", "C_Item", "C_MountJournal", "GetInventoryItemLink",
+    "C_CurrencyInfo", "GetCurrencyListSize", "GetCurrencyListInfo", "GetHonorCurrency", "GetNumTitles", "C_Map", "C_Item", "C_MountJournal", "GetInventoryItemLink",
 }
 
 local function probeApis()
@@ -139,6 +139,37 @@ local function probeReputation()
     return out
 end
 
+-- Currencies: the modern C_CurrencyInfo list if it exists, else the old globals.
+local function flat(data)
+    if type(data) ~= "table" then return tostring(data) end
+    local out = {}
+    for k, v in pairs(data) do out[k] = tostring(v) end
+    return out
+end
+
+local function probeCurrency()
+    local out = { list = {} }
+    local CI = C_CurrencyInfo
+    if CI and CI.GetCurrencyListSize and CI.GetCurrencyListInfo then
+        out.api = "C_CurrencyInfo"
+        out.count = try(CI.GetCurrencyListSize)
+        for i = 1, tonumber(out.count[1]) or 0 do
+            local ok, data = pcall(CI.GetCurrencyListInfo, i)
+            out.list[i] = ok and flat(data) or { err = tostring(data) }
+        end
+        out.backpack = CI.GetBackpackCurrencyInfo and flat((select(2, pcall(CI.GetBackpackCurrencyInfo, 1)))) or "missing"
+    elseif GetCurrencyListSize and GetCurrencyListInfo then
+        out.api = "legacy"
+        out.count = try(GetCurrencyListSize)
+        for i = 1, tonumber(out.count[1]) or 0 do out.list[i] = try(GetCurrencyListInfo, i) end
+    else
+        out.api = "none"
+    end
+    out.honor = try(GetHonorCurrency)
+    out.pvp = try(GetPVPLifetimeStats)
+    return out
+end
+
 -- /altboard probe: raid info and played time arrive by events, so ask, wait, then save.
 local running = false
 local function runProbe()
@@ -157,6 +188,7 @@ local function runProbe()
             result.lockouts = probeLockouts()
             result.skills = probeSkills()
             result.reputation = probeReputation()
+            result.currency = probeCurrency()
         end)
         if not ok then result.error = tostring(err) end
         AB.db.probe = AB.db.probe or {}
