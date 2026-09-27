@@ -242,11 +242,20 @@ local function cell(row, i)
         c.fill:SetPoint("TOPLEFT", c.track)
         c.fill:SetPoint("BOTTOMLEFT", c.track)
         c.fill:SetColorTexture(Theme:Accent())
+        c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        c:SetScript("OnClick", function(self, button)
+            if button == "RightButton" and self.onRightClick then
+                W.HideTooltip()
+                self.onRightClick(self)
+            end
+        end)
         c:SetScript("OnEnter", function(self) if self.tip then W.ShowTooltip(self, self.tip) end end)
         c:SetScript("OnLeave", W.HideTooltip)
         row.cells[i] = c
     end
     c.tip = nil
+    c.onRightClick = nil
+    c:SetAlpha(1)
     c.sub:SetText("")
     c.mark:Hide()
     c.track:Hide()
@@ -289,7 +298,9 @@ function Board.Refresh()
     if not frame or not frame:IsShown() then return end
     rowPool:ReleaseAll()
 
-    local chars = Data.Characters()
+    local hiddenCount = Data.HiddenCount()
+    if hiddenCount == 0 then Board.showHidden = false end
+    local chars = Data.Characters(Board.showHidden)
     local nVis = visibleColumns(#chars)
     colOffset = max(0, min(colOffset, #chars - nVis))
     local width = S.labelW + nVis * S.colW
@@ -297,6 +308,13 @@ function Board.Refresh()
 
     local total = money(Data.TotalMoney()) or "0"
     frame.total:SetText(total)
+    if hiddenCount > 0 then
+        frame.hiddenBtn.text:SetText(Board.showHidden and "hide hidden" or (hiddenCount .. " hidden"))
+        frame.hiddenBtn:SetWidth(frame.hiddenBtn.text:GetStringWidth() + 12)
+        frame.hiddenBtn:Show()
+    else
+        frame.hiddenBtn:Hide()
+    end
     if #chars > nVis then
         frame.paging:SetText(("%d-%d of %d  (mouse wheel)"):format(colOffset + 1, colOffset + nVis, #chars))
     else
@@ -320,16 +338,21 @@ function Board.Refresh()
         c.text:SetText(cd.name)
         local r, g, b = Theme.ClassColor(cd.class)
         if r then c.text:SetTextColor(r, g, b) else c.text:SetTextColor(Theme:Color("text")) end
-        c.sub:SetText(("%s %s"):format(cd.level or "?", cd.race or ""))
+        c.sub:SetText(("%s %s"):format(cd.level or "?", cd.race or "") .. (cd.hidden and "  (hidden)" or ""))
+        if cd.hidden then c:SetAlpha(0.45) end
         if e.guid == me then
             c.mark:SetColorTexture(Theme:Accent())
             c.mark:Show()
         end
-        c.tip = {
+        local tip = {
             (cd.name or "?") .. " - " .. (cd.realm or "?"),
             ("Level %s %s %s"):format(cd.level or "?", cd.race or "", cd.class and (LOCALIZED_CLASS_NAMES_MALE or {})[cd.class] or ""),
-            cd.guild and ("<" .. cd.guild .. ">") or nil,
         }
+        if cd.guild then tip[#tip + 1] = "<" .. cd.guild .. ">" end
+        tip[#tip + 1] = colorCode("textFaint") .. "Right-click: move, hide, delete|r"
+        c.tip = tip
+        c.guid = e.guid
+        c.onRightClick = Board.CharacterMenu
     end
     y = y - S.headerH
 
@@ -426,6 +449,39 @@ function Board.Refresh()
     end
 end
 
+-- Right-click menu on a character name.
+function Board.CharacterMenu(c)
+    local guid = c.guid
+    local cd = AB.db.chars[guid]
+    if not cd then return end
+    local chars = Data.Characters(Board.showHidden)
+    local index
+    for i, e in ipairs(chars) do if e.guid == guid then index = i end end
+    local isMe = guid == AB.guid
+    W.OpenMenu({
+        { text = cd.name, title = true },
+        { text = "Move left", disabled = index == 1, onClick = function()
+            Data.Move(guid, -1, Board.showHidden)
+            Board.Refresh()
+        end },
+        { text = "Move right", disabled = index == #chars, onClick = function()
+            Data.Move(guid, 1, Board.showHidden)
+            Board.Refresh()
+        end },
+        { text = cd.hidden and "Unhide" or "Hide", onClick = function()
+            Data.SetHidden(guid, not cd.hidden)
+            Board.Refresh()
+        end },
+        { text = isMe and "Delete (not while logged in)" or "Delete...", danger = true, disabled = isMe, onClick = function()
+            W.Confirm(("Delete all AltBoard data for %s?\nIt comes back the next time you log in on it."):format(cd.name),
+                "Delete", function()
+                    Data.Delete(guid)
+                    Board.Refresh()
+                end)
+        end },
+    }, c)
+end
+
 -- ---------------------------------------------------------------------------
 -- Window
 -- ---------------------------------------------------------------------------
@@ -486,6 +542,21 @@ local function build()
 
     frame.total = W.Text(title, 0, "text")
     frame.total:SetPoint("RIGHT", close, "LEFT", -10, 0)
+    -- "N hidden": shows hidden characters (dimmed) until clicked again. Not saved.
+    local hb = CreateFrame("Button", nil, title)
+    hb:SetHeight(22)
+    hb:SetPoint("RIGHT", frame.total, "LEFT", -14, 0)
+    hb.text = W.Text(hb, -1, "textFaint")
+    hb.text:SetPoint("CENTER")
+    hb:SetScript("OnEnter", function(self) self.text:SetTextColor(Theme:Color("text")) end)
+    hb:SetScript("OnLeave", function(self) self.text:SetTextColor(Theme:Color("textFaint")) end)
+    hb:SetScript("OnClick", function()
+        Board.showHidden = not Board.showHidden
+        Board.Refresh()
+    end)
+    hb:Hide()
+    frame.hiddenBtn = hb
+
     frame.paging = W.Text(title, -2, "textFaint")
     frame.paging:SetPoint("LEFT", name, "RIGHT", 14, -1)
 
@@ -501,7 +572,7 @@ local function build()
     -- Wheel: pages characters when they don't fit; if rows overflow too, shift+wheel scrolls rows.
     frame:EnableMouseWheel(true)
     frame:SetScript("OnMouseWheel", function(_, delta)
-        local chars = #Data.Characters()
+        local chars = #Data.Characters(Board.showHidden)
         local canCols = chars > visibleColumns(chars)
         local canRows = (frame.contentH or 0) > (frame.viewH or 0)
         if canCols and not (canRows and IsShiftKeyDown()) then
@@ -518,7 +589,10 @@ local function build()
         Data.Flush()
         Board.Refresh()
     end)
-    frame:SetScript("OnHide", W.HideTooltip)
+    frame:SetScript("OnHide", function()
+        W.HideTooltip()
+        W.CloseMenus()
+    end)
     frame:Hide()
     restorePosition()
 end

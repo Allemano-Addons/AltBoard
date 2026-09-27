@@ -116,6 +116,135 @@ function W.CloseButton(parent, onClick)
     return b
 end
 
+-- ---------------------------------------------------------------------------
+-- Context menu and confirm dialog. A full-screen invisible catcher closes them on any
+-- click outside.
+-- ---------------------------------------------------------------------------
+
+local catcher, menu, dialog
+
+local function closeAll()
+    if menu then menu:Hide() end
+    if dialog then dialog:Hide() end
+    if catcher then catcher:Hide() end
+end
+W.CloseMenus = closeAll
+
+local function getCatcher()
+    if not catcher then
+        catcher = CreateFrame("Button", nil, UIParent)
+        catcher:SetAllPoints(UIParent)
+        catcher:SetFrameStrata("FULLSCREEN_DIALOG")
+        catcher:RegisterForClicks("AnyUp")
+        catcher:SetScript("OnClick", closeAll)
+    end
+    catcher:Show()
+    return catcher
+end
+
+local function panel()
+    local f = CreateFrame("Frame", nil, UIParent)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:SetFrameLevel(getCatcher():GetFrameLevel() + 10)
+    f:SetClampedToScreen(true)
+    f:EnableMouse(true)
+    f.bg = W.Fill(f, "field", 0.98)
+    f.bg:SetAllPoints()
+    W.Border(f, "line")
+    return f
+end
+
+local function menuButton(parent)
+    local b = CreateFrame("Button", nil, parent)
+    b:SetHeight(22)
+    b.bg = W.Fill(b, "selected", 1)
+    b.bg:SetAllPoints()
+    b.bg:Hide()
+    b.text = W.Text(b, 0, "text")
+    b.text:SetPoint("LEFT", 10, 0)
+    b:SetScript("OnEnter", function(self) if self:IsEnabled() then self.bg:Show() end end)
+    b:SetScript("OnLeave", function(self) self.bg:Hide() end)
+    return b
+end
+
+-- items = { { text, onClick, disabled, danger, title } }. Title items are faint headings.
+function W.OpenMenu(items, anchor)
+    closeAll()
+    getCatcher()
+    if not menu then
+        menu = panel()
+        menu.buttons = {}
+    end
+    menu:SetFrameLevel(catcher:GetFrameLevel() + 10)
+    local width = 120
+    for i, item in ipairs(items) do
+        local b = menu.buttons[i] or menuButton(menu)
+        menu.buttons[i] = b
+        b:ClearAllPoints()
+        b:SetPoint("TOPLEFT", 1, -4 - (i - 1) * 22)
+        b:SetPoint("RIGHT", -1, 0)
+        b.text:SetText(item.text)
+        local key = item.title and "textFaint" or item.disabled and "textFaint" or item.danger and "warn" or "text"
+        b.text:SetTextColor(Theme:Color(key))
+        b:SetEnabled(not item.disabled and not item.title)
+        b:SetScript("OnClick", function()
+            closeAll()
+            if item.onClick then item.onClick() end
+        end)
+        b:Show()
+        width = max(width, b.text:GetStringWidth() + 30)
+    end
+    for i = #items + 1, #menu.buttons do menu.buttons[i]:Hide() end
+    menu:SetSize(width, #items * 22 + 8)
+    menu:ClearAllPoints()
+    menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
+    menu:Show()
+end
+
+-- Yes/No box in the middle of the screen.
+function W.Confirm(text, yesLabel, onYes)
+    closeAll()
+    getCatcher()
+    if not dialog then
+        dialog = panel()
+        dialog:SetSize(300, 110)
+        dialog.text = W.Text(dialog, 0, "text")
+        dialog.text:SetWordWrap(true)
+        dialog.text:SetJustifyH("CENTER")
+        dialog.text:SetPoint("TOPLEFT", 16, -18)
+        dialog.text:SetPoint("TOPRIGHT", -16, -18)
+        local function button(label, colorKey)
+            local b = CreateFrame("Button", nil, dialog)
+            b:SetSize(110, 26)
+            b.bg = W.Fill(b, colorKey, 1)
+            b.bg:SetAllPoints()
+            W.Border(b, "line")
+            b.text = W.Text(b, 0, "text")
+            b.text:SetPoint("CENTER")
+            b.text:SetText(label)
+            b:SetScript("OnEnter", function(self) self.bg:SetAlpha(0.8) end)
+            b:SetScript("OnLeave", function(self) self.bg:SetAlpha(1) end)
+            return b
+        end
+        dialog.yes = button("", "selected")
+        dialog.yes:SetPoint("BOTTOMRIGHT", dialog, "BOTTOM", -4, 14)
+        dialog.yes.text:SetTextColor(Theme:Color("warn"))
+        dialog.no = button("Cancel", "field")
+        dialog.no:SetPoint("BOTTOMLEFT", dialog, "BOTTOM", 4, 14)
+        dialog.no:SetScript("OnClick", closeAll)
+    end
+    dialog:SetFrameLevel(catcher:GetFrameLevel() + 10)
+    dialog.text:SetText(text)
+    dialog.yes.text:SetText(yesLabel or "Yes")
+    dialog.yes:SetScript("OnClick", function()
+        closeAll()
+        onYes()
+    end)
+    dialog:ClearAllPoints()
+    dialog:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+    dialog:Show()
+end
+
 -- Reused frames.
 function W.Pool(create, reset)
     local pool = { free = {}, active = {} }

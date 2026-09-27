@@ -189,20 +189,71 @@ end)
 -- Reading
 -- ---------------------------------------------------------------------------
 
--- Characters as a list { guid = ..., data = ... }: current first, then level, then name.
-function Data.Characters()
+-- Characters as a list { guid = ..., data = ... }. Default order: current first, then
+-- level, then name. Once the player moved a character, AltBoardDB.order decides and
+-- characters not in it yet come last (in the default order).
+function Data.Characters(includeHidden)
     local list = {}
     for guid, c in pairs(AB.db and AB.db.chars or {}) do
-        if c.name then list[#list + 1] = { guid = guid, data = c } end
+        if c.name and (includeHidden or not c.hidden) then list[#list + 1] = { guid = guid, data = c } end
     end
     local me = AB.guid
+    local pos = {}
+    for i, guid in ipairs(AB.db and AB.db.order or {}) do pos[guid] = i end
     sort(list, function(a, b)
+        local pa, pb = pos[a.guid] or math.huge, pos[b.guid] or math.huge
+        if pa ~= pb then return pa < pb end
         if (a.guid == me) ~= (b.guid == me) then return a.guid == me end
         local la, lb = a.data.level or 0, b.data.level or 0
         if la ~= lb then return la > lb end
         return (a.data.name or "") < (b.data.name or "")
     end)
     return list
+end
+
+function Data.HiddenCount()
+    local n = 0
+    for _, c in pairs(AB.db and AB.db.chars or {}) do
+        if c.name and c.hidden then n = n + 1 end
+    end
+    return n
+end
+
+-- Move a character one step (-1 left, +1 right) among the visible ones (hidden characters
+-- are skipped over). Saves the full order from then on.
+function Data.Move(guid, dir, includeHidden)
+    local shown = Data.Characters(includeHidden)
+    local i
+    for n, e in ipairs(shown) do if e.guid == guid then i = n end end
+    local j = i and i + dir
+    if not j or j < 1 or j > #shown then return end
+    shown[i], shown[j] = shown[j], shown[i]
+    -- Rebuild the order: the visible ones as now shown, hidden ones kept in their slots.
+    local all, order, k = Data.Characters(true), {}, 0
+    for _, e in ipairs(all) do
+        if includeHidden or not e.data.hidden then
+            k = k + 1
+            order[#order + 1] = shown[k].guid
+        else
+            order[#order + 1] = e.guid
+        end
+    end
+    AB.db.order = order
+end
+
+function Data.SetHidden(guid, hidden)
+    local c = AB.db.chars[guid]
+    if c then c.hidden = hidden or nil end
+end
+
+-- Forget a character completely (never the logged-in one: it would come straight back).
+function Data.Delete(guid)
+    if guid == AB.guid then return end
+    AB.db.chars[guid] = nil
+    local order = AB.db.order
+    if order then
+        for i = #order, 1, -1 do if order[i] == guid then tremove(order, i) end end
+    end
 end
 
 function Data.TotalMoney()

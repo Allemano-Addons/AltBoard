@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+- Character management: right-click a name for Move left / Move right / Hide / Delete (with confirm;
+  not the logged-in character). Once moved, the order is saved (`AltBoardDB.order`), new characters
+  come last. "N hidden" in the title shows hidden characters dimmed so they can be unhidden.
+
 ## 0.2.1
 - Reputation cells: centered standing with a thin accent progress bar (like the mockup); tooltip
   shows exact reputation, percent and how much is left to the next standing.
