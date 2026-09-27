@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.1
+- Fix: gold was saved as 0 at logout (GetMoney() returns 0 during PLAYER_LOGOUT on Forever).
+
 ## 0.1.0
 - The board (`/ab`): characters as columns, sections Overview (level, item level, gold, rested,
   guild, location, last seen), Professions and Currency. Total gold in the title. Hush look;

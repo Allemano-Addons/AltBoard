@@ -142,8 +142,11 @@ for event, parts in pairs(EVENTS) do
     AB:RegisterEvent(event, function() Data.Mark(unpack(parts)) end)
 end
 
+-- Logout: only the zone and "last seen". GetMoney() already returns 0 here on WoW Forever,
+-- and money is kept current by PLAYER_MONEY anyway.
 AB:RegisterEvent("PLAYER_LOGOUT", function()
-    Data.Mark("money", "zone")
+    dirty.money = nil
+    Data.Mark("zone")
     flush()
 end)
 
