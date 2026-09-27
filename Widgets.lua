@@ -343,8 +343,9 @@ function W.Dropdown(parent, width, getOptions, onChange)
     return d
 end
 
--- Square color swatch with a selection ring.
-function W.Swatch(parent, r, g, b, onClick)
+-- Square color swatch (hex "RRGGBB") with a selection ring.
+function W.Swatch(parent, hex, onClick)
+    local r, g, b = Theme.Hex(hex)
     local s = CreateFrame("Button", nil, parent)
     s:SetSize(22, 22)
     s.ring = W.Border(s, "line")
@@ -442,7 +443,7 @@ function W.OpenMenu(items, anchor)
         b:SetEnabled(not item.disabled and not item.title)
         b:SetScript("OnClick", function()
             closeAll()
-            if item.onClick then item.onClick() end
+            if item.onClick then AB:Call("menu: " .. tostring(item.text), item.onClick) end
         end)
         b:Show()
         width = max(width, b.text:GetStringWidth() + 30)
@@ -507,7 +508,7 @@ function W.Confirm(text, yesLabel, onYes)
     dialog.yes.text:SetText(yesLabel or "Yes")
     dialog.yes:SetScript("OnClick", function()
         closeAll()
-        onYes()
+        AB:Call("confirm", onYes)
     end)
     dialog:ClearAllPoints()
     dialog:SetPoint("CENTER", UIParent, "CENTER", 0, 120)

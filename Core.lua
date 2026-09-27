@@ -11,6 +11,32 @@ function AB:Print(...)
 end
 
 -- ---------------------------------------------------------------------------
+-- Errors: WoW Forever does not show Lua errors, so they are kept (last 10, also in
+-- AltBoardDB.errors), announced once per session and listed by /ab errors.
+-- ---------------------------------------------------------------------------
+
+AB.errors = {}
+local announced = false
+
+function AB:RecordError(where, err)
+    local list = self.errors
+    list[#list + 1] = { t = time(), where = tostring(where), msg = tostring(err):sub(1, 400), v = self.version }
+    while #list > 10 do tremove(list, 1) end
+    if not announced then
+        announced = true
+        self:Print("|cffe8a33dhit an error|r (" .. tostring(where) .. "). /ab errors shows it.")
+    end
+    geterrorhandler()(err)
+end
+
+-- Run fn protected; errors are recorded instead of lost.
+function AB:Call(where, fn, ...)
+    local ok, err = pcall(fn, ...)
+    if not ok then self:RecordError(where, err) end
+    return ok
+end
+
+-- ---------------------------------------------------------------------------
 -- Game events: several handlers per event, one shared frame. Each handler runs
 -- protected so one failing part never stops the others.
 -- ---------------------------------------------------------------------------
@@ -49,13 +75,13 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
     local n = #list
     if n == 1 then
         local ok, err = pcall(list[1], event, ...)
-        if not ok then geterrorhandler()(err) end
+        if not ok then AB:RecordError(event, err) end
         return
     end
     local snapshot = { unpack(list, 1, n) }
     for i = 1, n do
         local ok, err = pcall(snapshot[i], event, ...)
-        if not ok then geterrorhandler()(err) end
+        if not ok then AB:RecordError(event, err) end
     end
 end)
 
@@ -95,7 +121,7 @@ function AB:SetSetting(key, value)
     self.db.settings[key] = value
     for _, fn in ipairs(settingListeners) do
         local ok, err = pcall(fn, key, value)
-        if not ok then geterrorhandler()(err) end
+        if not ok then AB:RecordError("setting " .. tostring(key), err) end
     end
 end
 
@@ -108,6 +134,11 @@ local function initDB()
     db.launcher = db.launcher or {}
     db.chars = db.chars or {} -- keyed by player GUID
     db.window = db.window or {}
+    -- Errors from before the saved data was loaded are kept too.
+    db.errors = db.errors or {}
+    for _, e in ipairs(AB.errors) do tinsert(db.errors, e) end
+    while #db.errors > 10 do tremove(db.errors, 1) end
+    AB.errors = db.errors
     AB.db = db
 end
 
@@ -140,6 +171,18 @@ end
 
 AB:AddSlashCommand("version", function() AB:Print("v" .. tostring(AB.version)) end, "show version")
 
+AB:AddSlashCommand("errors", function(arg)
+    if strlower(arg or "") == "clear" then
+        wipe(AB.errors)
+        AB:Print("Error list cleared.")
+        return
+    end
+    if #AB.errors == 0 then AB:Print("No errors recorded.") return end
+    for _, e in ipairs(AB.errors) do
+        AB:Print(("[%s] %s (v%s): %s"):format(date("%d/%m %H:%M", e.t), e.where, tostring(e.v), e.msg))
+    end
+end, "show recent errors (/ab errors clear empties the list)")
+
 SLASH_ALTBOARD1 = "/altboard"
 SLASH_ALTBOARD2 = "/ab"
 SlashCmdList.ALTBOARD = function(msg)
@@ -151,7 +194,7 @@ SlashCmdList.ALTBOARD = function(msg)
         AB:Toggle()
     elseif c then
         local ok, err = pcall(c.fn, rest)
-        if not ok then geterrorhandler()(err) end
+        if not ok then AB:RecordError("/ab " .. cmd, err) end
     else
         AB:Print("/altboard - open/close")
         for _, name in ipairs(slashOrder) do

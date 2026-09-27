@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+- Fix: the settings window never opened (color swatches got only one of three color values, the
+  build failed silently and left an invisible window). A failed build now cleans up.
+- Errors are recorded (last 10, in AltBoardDB.errors), announced once per session in chat and
+  listed by `/ab errors` (WoW Forever does not show Lua errors). Clicks run protected.
+- `Tests/smoke_test.lua`: loads the addon against a fake WoW API and clicks through board and
+  settings (`lua Tests/smoke_test.lua`).
+
 ## 0.4.0
 - Settings window (gear button in the title bar, `/ab settings`): font (game fonts + fonts other
   addons share via LibSharedMedia), text size, accent (follow Hush / class / custom presets),

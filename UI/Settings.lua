@@ -130,7 +130,7 @@ local function build()
     swatches:SetPoint("TOPLEFT", CONTROL_X, -(y - 2))
     swatches.list = {}
     for i, hex in ipairs(Theme.ACCENTS) do
-        local sw = W.Swatch(swatches, Theme.Hex(hex), function()
+        local sw = W.Swatch(swatches, hex, function()
             s.accentMode = "custom"
             accent:Set("custom")
             set("accent", hex)
@@ -215,7 +215,17 @@ end
 
 function Settings.Toggle()
     if not AB.db then return end
-    if not frame then build() end
+    if not frame then
+        -- A failed build must not leave a half-made (invisible) window behind.
+        local ok, err = pcall(build)
+        if not ok then
+            if frame then frame:Hide() end
+            frame = nil
+            wipe(controls)
+            AB:RecordError("settings build", err)
+            return
+        end
+    end
     if frame:IsShown() then frame:Hide() return end
     for _, c in ipairs(controls) do c.refresh() end
     place()

@@ -85,7 +85,7 @@ local function build()
         W.HideTooltip()
     end)
     button:SetScript("OnClick", function(_, mouseButton)
-        if mouseButton == "RightButton" then openMenu() else AB.Board.Toggle() end
+        AB:Call("launcher", mouseButton == "RightButton" and openMenu or AB.Board.Toggle)
     end)
     button:SetScript("OnDragStart", function(self)
         if db().locked then return end

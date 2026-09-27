@@ -17,7 +17,7 @@ local colOffset, scrollY = 0, 0
 
 local function colorCode(key)
     local r, g, b = Theme:Color(key)
-    return ("|cff%02x%02x%02x"):format(r * 255, g * 255, b * 255)
+    return ("|cff%02x%02x%02x"):format(floor(r * 255 + 0.5), floor(g * 255 + 0.5), floor(b * 255 + 0.5))
 end
 
 local function money(copper)
@@ -142,7 +142,7 @@ local function standingCode(reaction)
         local f = STANDING_COLOR_FALLBACK[reaction] or { 1, 1, 1 }
         r, g, b = f[1], f[2], f[3]
     end
-    return ("|cff%02x%02x%02x"):format(r * 255, g * 255, b * 255)
+    return ("|cff%02x%02x%02x"):format(floor(r * 255 + 0.5), floor(g * 255 + 0.5), floor(b * 255 + 0.5))
 end
 
 -- Rows grouped under their header ("Horde", "Other"...), groups and factions by name.
@@ -246,7 +246,7 @@ local function cell(row, i)
         c:SetScript("OnClick", function(self, button)
             if button == "RightButton" and self.onRightClick then
                 W.HideTooltip()
-                self.onRightClick(self)
+                AB:Call("character menu", self.onRightClick, self)
             end
         end)
         c:SetScript("OnEnter", function(self) if self.tip then W.ShowTooltip(self, self.tip) end end)
@@ -541,7 +541,7 @@ local function build()
 
     local close = W.CloseButton(title, function() frame:Hide() end)
     close:SetPoint("RIGHT", -8, 0)
-    local gear = W.SettingsButton(title, "Settings", function() AB.Settings.Toggle() end)
+    local gear = W.SettingsButton(title, "Settings", function() AB:Call("settings button", AB.Settings.Toggle) end)
     gear:SetPoint("RIGHT", close, "LEFT", -2, 0)
 
     frame.total = W.Text(title, 0, "text")

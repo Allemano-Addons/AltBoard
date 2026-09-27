@@ -134,7 +134,7 @@ local function flush()
     if not c then return end
     for part in pairs(dirty) do
         local ok, err = pcall(COLLECTORS[part], c)
-        if not ok then geterrorhandler()(err) end
+        if not ok then AB:RecordError("collect " .. part, err) end
     end
     wipe(dirty)
     c.lastSeen = time()
