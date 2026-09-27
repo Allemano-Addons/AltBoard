@@ -45,12 +45,17 @@ end
 eventFrame:SetScript("OnEvent", function(_, event, ...)
     local list = eventHandlers[event]
     if not list then return end
-    for i = #list, 1, -1 do -- backwards: a handler may unregister itself
-        local fn = list[i]
-        if fn then
-            local ok, err = pcall(fn, event, ...)
-            if not ok then geterrorhandler()(err) end
-        end
+    -- In registration order, over a copy: a handler may unregister itself.
+    local n = #list
+    if n == 1 then
+        local ok, err = pcall(list[1], event, ...)
+        if not ok then geterrorhandler()(err) end
+        return
+    end
+    local snapshot = { unpack(list, 1, n) }
+    for i = 1, n do
+        local ok, err = pcall(snapshot[i], event, ...)
+        if not ok then geterrorhandler()(err) end
     end
 end)
 
@@ -64,6 +69,7 @@ local function initDB()
     db.schema = db.schema or AB.SCHEMA
     db.settings = db.settings or {}
     db.chars = db.chars or {} -- keyed by player GUID
+    db.window = db.window or {}
     AB.db = db
 end
 

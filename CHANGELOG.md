@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0
+- The board (`/ab`): characters as columns, sections Overview (level, item level, gold, rested,
+  guild, location, last seen), Professions and Currency. Total gold in the title. Hush look;
+  uses Hush's accent color when Hush is installed, never requires it.
+- Data is saved per character (by GUID) from events only: money, level/XP, gear, zone,
+  professions (GetProfessions/GetProfessionInfo) and currencies (C_CurrencyInfo).
+- ESC closes the window; drag by the title bar; mouse wheel pages characters when they don't fit.
+
 ## 0.0.2
 - Probe also records currencies (C_CurrencyInfo or the old API, honor). Build order changed:
   lockouts wait until the beta level cap allows raids; v0.1 = gold, currency and professions.

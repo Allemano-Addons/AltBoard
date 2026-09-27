@@ -1,0 +1,174 @@
+-- Data: snapshot of the logged-in character, saved in AltBoardDB.chars[guid].
+-- Event driven: each event marks what changed and one short timer saves it all.
+local _, AB = ...
+
+local Data = {}
+AB.Data = Data
+
+local function char()
+    local guid = AB.guid or UnitGUID("player")
+    if not guid or not AB.db then return nil end
+    local c = AB.db.chars[guid]
+    if not c then
+        c = {}
+        AB.db.chars[guid] = c
+    end
+    return c
+end
+
+-- ---------------------------------------------------------------------------
+-- Collectors
+-- ---------------------------------------------------------------------------
+
+local function collectIdentity(c)
+    c.name = AB.Compat.PlayerName()
+    c.realm = AB.Compat.PlayerRealm()
+    local _, classFile = UnitClass("player")
+    c.class = classFile
+    c.race = UnitRace("player")
+    c.faction = UnitFactionGroup("player")
+    c.level = UnitLevel("player")
+    c.guild = IsInGuild() and GetGuildInfo("player") or nil
+    c.rested = GetXPExhaustion and GetXPExhaustion() or nil
+    c.xp, c.xpMax = UnitXP("player"), UnitXPMax("player")
+end
+
+local function collectMoney(c)
+    c.money = GetMoney()
+end
+
+local function collectGear(c)
+    if not GetAverageItemLevel then return end
+    local _, equipped = GetAverageItemLevel()
+    c.ilvl = equipped
+end
+
+local function collectZone(c)
+    c.zone = GetRealZoneText and GetRealZoneText() or nil
+end
+
+-- GetProfessions returns spellbook indexes (nil = empty slot). Slots 1-2 are the main
+-- professions, the rest secondary; each index goes to GetProfessionInfo.
+local function collectProfessions(c)
+    if not (GetProfessions and GetProfessionInfo) then return end
+    local slots = { GetProfessions() }
+    local list = {}
+    for slot = 1, select("#", GetProfessions()) do
+        local index = slots[slot]
+        if index then
+            local ok, name, icon, rank, maxRank, _, _, skillLine = pcall(GetProfessionInfo, index)
+            if ok and name then
+                list[#list + 1] = {
+                    name = name, icon = icon, rank = rank, max = maxRank,
+                    skillLine = skillLine, primary = slot <= 2,
+                }
+            end
+        end
+    end
+    c.profs = list
+end
+
+-- Only currencies the character has (quantity > 0) are kept, keyed by name (the list
+-- does not always carry an id).
+local function collectCurrency(c)
+    local CI = C_CurrencyInfo
+    if not (CI and CI.GetCurrencyListSize and CI.GetCurrencyListInfo) then return end
+    local out = {}
+    for i = 1, CI.GetCurrencyListSize() do
+        local info = CI.GetCurrencyListInfo(i)
+        if info and not info.isHeader and info.name and (info.quantity or 0) > 0 then
+            out[info.name] = { qty = info.quantity, max = info.maxQuantity, icon = info.iconFileID }
+        end
+    end
+    c.currency = out
+end
+
+local COLLECTORS = {
+    identity = collectIdentity, money = collectMoney, gear = collectGear, zone = collectZone,
+    profs = collectProfessions, currency = collectCurrency,
+}
+
+-- ---------------------------------------------------------------------------
+-- Dirty flags + one timer
+-- ---------------------------------------------------------------------------
+
+local dirty, pending = {}, false
+
+local function flush()
+    pending = false
+    local c = char()
+    if not c then return end
+    for part in pairs(dirty) do
+        local ok, err = pcall(COLLECTORS[part], c)
+        if not ok then geterrorhandler()(err) end
+    end
+    wipe(dirty)
+    c.lastSeen = time()
+    if AB.Board then AB.Board.Refresh() end
+end
+
+function Data.Mark(...)
+    for i = 1, select("#", ...) do dirty[select(i, ...)] = true end
+    if not pending then
+        pending = true
+        AB.Compat.After(1, flush)
+    end
+end
+
+-- Right now, without waiting (opening the board, logout).
+function Data.Flush()
+    if next(dirty) then flush() end
+end
+
+AB:RegisterEvent("PLAYER_LOGIN", function()
+    -- Professions and currencies are not always ready at login: again a bit later.
+    Data.Mark("identity", "money", "gear", "zone", "profs", "currency")
+    AB.Compat.After(5, function() Data.Mark("profs", "currency", "gear") end)
+end)
+
+local EVENTS = {
+    PLAYER_MONEY = { "money" },
+    PLAYER_LEVEL_UP = { "identity" },
+    PLAYER_XP_UPDATE = { "identity" },
+    UPDATE_EXHAUSTION = { "identity" },
+    PLAYER_GUILD_UPDATE = { "identity" },
+    PLAYER_EQUIPMENT_CHANGED = { "gear" },
+    ZONE_CHANGED_NEW_AREA = { "zone" },
+    SKILL_LINES_CHANGED = { "profs" },
+    TRADE_SKILL_LIST_UPDATE = { "profs" },
+    CURRENCY_DISPLAY_UPDATE = { "currency" },
+}
+for event, parts in pairs(EVENTS) do
+    AB:RegisterEvent(event, function() Data.Mark(unpack(parts)) end)
+end
+
+AB:RegisterEvent("PLAYER_LOGOUT", function()
+    Data.Mark("money", "zone")
+    flush()
+end)
+
+-- ---------------------------------------------------------------------------
+-- Reading
+-- ---------------------------------------------------------------------------
+
+-- Characters as a list { guid = ..., data = ... }: current first, then level, then name.
+function Data.Characters()
+    local list = {}
+    for guid, c in pairs(AB.db and AB.db.chars or {}) do
+        if c.name then list[#list + 1] = { guid = guid, data = c } end
+    end
+    local me = AB.guid
+    sort(list, function(a, b)
+        if (a.guid == me) ~= (b.guid == me) then return a.guid == me end
+        local la, lb = a.data.level or 0, b.data.level or 0
+        if la ~= lb then return la > lb end
+        return (a.data.name or "") < (b.data.name or "")
+    end)
+    return list
+end
+
+function Data.TotalMoney()
+    local total = 0
+    for _, c in pairs(AB.db and AB.db.chars or {}) do total = total + (c.money or 0) end
+    return total
+end
