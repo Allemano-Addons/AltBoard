@@ -8,7 +8,7 @@ _G.unpack = unpack
 local GETTERS = {
     GetStringWidth = 50, GetStringHeight = 12, GetEffectiveScale = 1, GetWidth = 1920, GetHeight = 1080,
     GetLeft = 100, GetTop = 800, GetRight = 400, GetBottom = 100, GetFrameLevel = 1, IsShown = false,
-    IsEnabled = true, IsVisible = true, GetText = "",
+    IsEnabled = true, IsVisible = true,
 }
 local scripts = setmetatable({}, { __mode = "k" })
 local function mock(kind)
@@ -29,6 +29,8 @@ local function mock(kind)
             end
         end
         if k == "SetFont" then return function() return true end end
+        if k == "SetText" then return function(self, v) self._text = v end end
+        if k == "GetText" then return function(self) return self._text or "" end end
         if k == "GetFont" then return function() return "Fonts\\FRIZQT__.TTF", 12 end end
         if k == "CreateTexture" or k == "CreateFontString" or k == "CreateLine" then return function() return mock(k) end end
         if GETTERS[k] ~= nil then local v = GETTERS[k]; return function() return v end end
@@ -44,6 +46,7 @@ UISpecialFrames = {}
 SlashCmdList = {}
 strjoin = function(sep, ...) return table.concat({ ... }, sep) end
 tostringall = function(...) local t = { ... } for i = 1, select("#", ...) do t[i] = tostring(t[i]) end return unpack(t, 1, select("#", ...)) end
+strsplit = function(sep, s) local t = {} for part in (s .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do t[#t + 1] = part end return unpack(t) end
 strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 strlower, strupper, tinsert, tremove, sort, floor, ceil, min, max, format = string.lower, string.upper, table.insert, table.remove, table.sort, math.floor, math.ceil, math.min, math.max, string.format
 wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
@@ -86,6 +89,29 @@ LOCALIZED_CLASS_NAMES_MALE = { DRUID = "Druid" }
 FACTION_BAR_COLORS = { [5] = { r = 0, g = 0.6, b = 0.1 } }
 BreakUpLargeNumbers = function(n) return tostring(n) end
 HushDB = { settings = { accent = "C8332E" } }
+-- Bags and bank (modern Enum.BagIndex names). Runecloth in two bags and the bank, a
+-- random-suffix shirt in the backpack. The bank reads empty unless "open".
+local function link(id, name, suffix)
+    return ("|cffffffff|Hitem:%d::::::%s:::|h[%s]|h|r"):format(id, suffix or "", name)
+end
+local bankReadable = false
+local CONTAINERS = {
+    [0] = { [1] = { link("14047", "Runecloth"), 20 }, [2] = { link("200", "Linen Shirt of the Bear", "1234"), 1 } },
+    [1] = { [1] = { link("14047", "Runecloth"), 10 } },
+    [-1] = { [1] = { link("14047", "Runecloth"), 30 } },
+}
+Enum = { BagIndex = { Backpack = 0, Bag_1 = 1, Keyring = -2, Bank = -1, BankBag_1 = 6 } }
+C_Container = {
+    GetContainerNumSlots = function(bag)
+        if (bag == -1 or bag == 6) and not bankReadable then return 0 end
+        return ({ [0] = 16, [1] = 8, [-1] = 24, [6] = 0 })[bag] or 0
+    end,
+    GetContainerItemInfo = function(bag, slot)
+        local e = CONTAINERS[bag] and CONTAINERS[bag][slot]
+        if not e then return nil end
+        return { hyperlink = e[1], stackCount = e[2], iconFileID = 1, quality = 1 }
+    end,
+}
 -- Gear and stats. Slot 5 (chest) is "not loaded yet" the first time, like a fresh login.
 local chestLoaded = false
 GetInventoryItemLink = function(_, slot)
@@ -96,7 +122,7 @@ C_Item = {
     GetItemInfo = function(link)
         local id = tonumber(link:match("item:(%d+)"))
         if id == 105 and not chestLoaded then return nil end
-        return "Item " .. (id - 100), link, 2, 20, 18, "Armor", "Cloth", 1, "INVTYPE_CHEST", 134400
+        return link:match("%[(.-)%]"), link, 2, 20, 18, "Armor", "Cloth", 1, "INVTYPE_CHEST", 134400
     end,
     GetDetailedItemLevelInfo = function() return 21 end,
 }
@@ -245,6 +271,70 @@ step("closing the board closes the sheet", function()
     assert(_G.AltBoardCharFrame._shown, "sheet not reopened")
     _G.AltBoardFrame:Hide()
     assert(not _G.AltBoardCharFrame._shown, "sheet still open")
+end)
+
+-- Bags, bank and search.
+step("bags saved, bank waits for the banker", function()
+    local c = AB.db.chars["Player-1-A"]
+    assert(c.bags and c.bags["14047"] == 30, "runecloth in bags: " .. tostring(c.bags and c.bags["14047"]))
+    assert(c.bags["200:1234"] == 1, "random-suffix key missing")
+    assert(AB.db.items["200:1234"].n == "Linen Shirt of the Bear", "item name not remembered")
+    assert(c.bagSlots.used == 3 and c.bagSlots.total == 24, "bag slots wrong")
+    assert(c.bank == nil, "bank read while closed")
+end)
+step("bank read when opened, kept after closing", function()
+    local c = AB.db.chars["Player-1-A"]
+    bankReadable = true
+    fire("BANKFRAME_OPENED")
+    assert(c.bank and c.bank["14047"] == 30, "bank not read")
+    -- A change, then closing before the 1 s timer while the client already dropped the bank.
+    local realAfter = C_Timer.After
+    C_Timer.After = function() end
+    fire("PLAYERBANKSLOTS_CHANGED")
+    local saved = CONTAINERS[-1]
+    CONTAINERS[-1] = {}
+    fire("BANKFRAME_CLOSED")
+    CONTAINERS[-1] = saved
+    C_Timer.After = realAfter
+    assert(c.bank["14047"] == 30, "empty read while closing wiped the bank")
+    bankReadable = false
+    fire("PLAYERBANKSLOTS_CHANGED")
+    fire("BAG_UPDATE_DELAYED")
+    assert(c.bank["14047"] == 30, "bank wiped after closing")
+end)
+step("search", function()
+    local r = AB.Data.Search("RUNE")
+    assert(#r == 1 and r[1].total == 60, "runecloth total wrong")
+    assert(r[1].chars[1].bags == 30 and r[1].chars[1].bank == 30, "per-character split wrong")
+    local worn = AB.Data.Search("item 1")
+    assert(#worn >= 1 and worn[1].chars[1].worn == 1, "equipped item not found")
+    assert(#AB.Data.Search("") == 0, "empty query should find nothing")
+end)
+step("search window", function()
+    AB.Items.Toggle("rune")
+    local f = _G.AltBoardItemsFrame
+    assert(f and f._shown, "items window not shown")
+    local shown = 0
+    for _, row in ipairs(f.rows) do if row._shown and row.result then shown = shown + 1 end end
+    assert(shown == 1 and f.rows[1].result.total == 60, "result row wrong (" .. shown .. ")")
+    scripts[f.rows[1]].OnEnter(f.rows[1])
+    AB.Items.Toggle()
+    assert(not f._shown, "items window did not close")
+end)
+step("sheet bags and bank tabs", function()
+    _G.AltBoardFrame:Show()
+    AB.CharSheet.Toggle("Player-1-A")
+    local sheet = _G.AltBoardCharFrame
+    for _, tab in ipairs(sheet.tabs) do
+        scripts[tab].OnClick(tab)
+        if tab.id ~= "gear" then
+            local cells = 0
+            for _, cell in ipairs(sheet.gridView.cells) do if cell._shown and cell.item then cells = cells + 1 end end
+            local want = tab.id == "bags" and 2 or 1
+            assert(cells == want, tab.id .. ": " .. cells .. " cells, want " .. want)
+        end
+    end
+    scripts[sheet.tabs[1]].OnClick(sheet.tabs[1])
 end)
 
 print(#errors == 0 and "ALL OK" or (#errors .. " error(s)"))

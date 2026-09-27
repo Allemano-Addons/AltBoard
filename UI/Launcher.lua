@@ -39,6 +39,7 @@ local function openMenu()
     W.OpenMenu({
         { text = "AltBoard", title = true },
         { text = board and board:IsShown() and "Close board" or "Open board", onClick = function() AB.Board.Toggle() end },
+        { text = "Search items", onClick = function() AB.Items.Toggle() end },
         { text = "Settings", onClick = function() AB.Settings.Toggle() end },
         { text = "Lock position", checked = db().locked == true, onClick = function() db().locked = not db().locked or nil end },
         { text = "Hide button", onClick = function()

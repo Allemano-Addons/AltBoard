@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+- Bags and bank are saved per character (counts per item; random-suffix items kept apart).
+  The bank is read whenever it is open; an unreadable or just-closed bank never overwrites.
+- Search items (magnifier in the board title, launcher menu, `/ab find <name>`): every
+  character's bags, bank and equipped items, total + who has it; hover = item tooltip with
+  the per-character split, shift-click links it.
+- Character sheet tabs Gear / Bags / Bank (grid, best quality first, mouse wheel scrolls).
+- Overview row "Bag space" (free slots).
+
 ## 0.6.0
 - Character sheet: left-click a name on the board. Equipped items (icon, quality color, item
   level; hover = the real item tooltip, shift-click links it) and stats (attributes, melee &

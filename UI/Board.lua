@@ -57,6 +57,12 @@ local OVERVIEW = {
         if not c.rested or not c.xpMax or c.xpMax == 0 then return nil end
         return floor(c.rested / c.xpMax * 100 + 0.5) .. "%", "good"
     end },
+    { label = "Bag space", value = function(c)
+        local s = c.bagSlots
+        if not s then return nil end
+        local free = s.total - s.used
+        return ("%d free"):format(free), free == 0 and "warn" or "text", { "Bags", ("%d / %d slots used"):format(s.used, s.total) }
+    end },
     { label = "Guild", value = function(c) return c.guild end },
     { label = "Location", value = function(c) return c.zone end },
     { label = "Last seen", value = function(c, isMe)
@@ -651,8 +657,13 @@ local function build()
     local gear = W.SettingsButton(title, "Settings", function() AB:Call("settings button", AB.Settings.Toggle) end)
     gear:SetPoint("RIGHT", close, "LEFT", -2, 0)
 
+    local search = W.IconButton(title, "search", "Search items (all characters)", function()
+        AB:Call("search button", AB.Items.Toggle)
+    end)
+    search:SetPoint("RIGHT", gear, "LEFT", -2, 0)
+
     frame.total = W.Text(title, 0, "text")
-    frame.total:SetPoint("RIGHT", gear, "LEFT", -10, 0)
+    frame.total:SetPoint("RIGHT", search, "LEFT", -10, 0)
     -- "N hidden": shows hidden characters (dimmed) until clicked again. Not saved.
     local hb = CreateFrame("Button", nil, title)
     hb:SetHeight(22)

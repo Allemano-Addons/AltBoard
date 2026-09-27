@@ -134,7 +134,9 @@ local function initDB()
     fillDefaults(db.settings, DEFAULT_SETTINGS)
     db.launcher = db.launcher or {}
     db.chars = db.chars or {} -- keyed by player GUID
+    db.items = db.items or {} -- [itemKey] = { n = name, q = quality, i = icon, l = link }, see Data.ItemKey
     db.window = db.window or {}
+    db.itemsWindow = db.itemsWindow or {}
     -- Errors from before the saved data was loaded are kept too.
     db.errors = db.errors or {}
     for _, e in ipairs(AB.errors) do tinsert(db.errors, e) end

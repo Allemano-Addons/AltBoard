@@ -8,9 +8,13 @@ local Sheet = {}
 AB.CharSheet = Sheet
 
 local WIDTH, HEADER_H, SLOT_H, COL_W, PAD = 520, 70, 36, 246, 12
-local STAT_H = 17
+local STAT_H, TAB_H, CELL = 17, 30, 40
+
+local TABS = { { id = "gear", label = "Gear" }, { id = "bags", label = "Bags" }, { id = "bank", label = "Bank" } }
+Sheet.tab = "gear"
 
 local frame, shownGuid
+local gridOffset = 0 -- first visible grid row (Bags/Bank)
 
 local SLOT_NAMES = {
     [1] = "Head", [2] = "Neck", [3] = "Shoulder", [4] = "Shirt", [5] = "Chest", [6] = "Waist",
@@ -162,6 +166,118 @@ local function applyLook()
     frame.bg:SetAlpha(AB.db.settings.bgAlpha or 0.96)
 end
 
+-- ---------------------------------------------------------------------------
+-- Bags / Bank grid: one cell per item (counts added up), best quality first.
+-- ---------------------------------------------------------------------------
+
+local GRID_COLS = floor((WIDTH - 2 * PAD) / CELL)
+
+local function cellTooltip(cell)
+    if not GameTooltip or not cell.item then return end
+    GameTooltip:SetOwner(cell, "ANCHOR_RIGHT")
+    if not (cell.item.l and pcall(GameTooltip.SetHyperlink, GameTooltip, cell.item.l)) then
+        GameTooltip:SetText(cell.item.n or "?")
+    end
+    GameTooltip:Show()
+end
+
+local function createCell(parent)
+    local b = CreateFrame("Button", nil, parent)
+    b:SetSize(CELL - 4, CELL - 4)
+    W.Fill(b, "field", 1):SetAllPoints()
+    b.ring = W.Border(b, "line")
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetPoint("TOPLEFT", 2, -2)
+    b.icon:SetPoint("BOTTOMRIGHT", -2, 2)
+    b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    b.count = b:CreateFontString(nil, "OVERLAY")
+    b.count:SetPoint("BOTTOMRIGHT", -3, 3)
+    b:SetScript("OnEnter", cellTooltip)
+    b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    b:SetScript("OnClick", function(self)
+        if self.item and self.item.l and HandleModifiedItemClick then HandleModifiedItemClick(self.item.l) end
+    end)
+    return b
+end
+
+local function buildGrid()
+    local g = CreateFrame("Frame", nil, frame)
+    g:SetPoint("TOPLEFT", 0, -(HEADER_H + TAB_H))
+    g:SetPoint("BOTTOMRIGHT", 0, 0)
+    g.info = W.Text(g, -1, "textFaint")
+    g.info:SetPoint("TOPLEFT", PAD, -12)
+    g.info:SetPoint("RIGHT", -PAD, 0)
+    g.area = CreateFrame("Frame", nil, g)
+    g.area:SetPoint("TOPLEFT", PAD, -36)
+    g.area:SetPoint("BOTTOMRIGHT", -PAD, PAD)
+    g.area:SetClipsChildren(true)
+    g.cells = {}
+    g:EnableMouseWheel(true)
+    g:SetScript("OnMouseWheel", function(_, delta)
+        gridOffset = gridOffset - delta
+        Sheet.Refresh()
+    end)
+    frame.gridView = g
+end
+
+local function refreshGrid(c)
+    local g = frame.gridView
+    local isBank = Sheet.tab == "bank"
+    local counts = isBank and c.bank or c.bags
+    local slots = isBank and c.bankSlots or c.bagSlots
+    local at = isBank and c.bankAt or c.bagsAt
+
+    if not counts then
+        g.info:SetText(isBank and "Bank not seen yet: open the bank once on this character."
+            or "Bags not read yet: log in on this character once.")
+    else
+        local when = (shownGuid == AB.guid and not isBank) and "now"
+            or (shownGuid == AB.guid and isBank and AB.Data.IsBankOpen()) and "open now"
+            or ago(at)
+        g.info:SetText(("%s: %d / %d slots used   -   %s %s"):format(isBank and "Bank" or "Bags",
+            slots and slots.used or 0, slots and slots.total or 0, isBank and "last visited" or "updated", when))
+    end
+
+    local list = {}
+    for key, count in pairs(counts or {}) do
+        list[#list + 1] = { key = key, count = count, item = AB.db.items[key] or { n = key } }
+    end
+    sort(list, function(a, b)
+        local qa, qb = a.item.q or 0, b.item.q or 0
+        if qa ~= qb then return qa > qb end
+        return (a.item.n or "") < (b.item.n or "")
+    end)
+
+    local rowsVisible = floor(g.area:GetHeight() / CELL)
+    local totalRows = ceil(#list / GRID_COLS)
+    gridOffset = max(0, min(gridOffset, totalRows - rowsVisible))
+    local first = gridOffset * GRID_COLS
+    local n = min(#list - first, rowsVisible * GRID_COLS)
+    for i = 1, max(n, #g.cells) do
+        local cell = g.cells[i]
+        local e = i <= n and list[first + i]
+        if e then
+            if not cell then
+                cell = createCell(g.area)
+                g.cells[i] = cell
+            end
+            local col, row = (i - 1) % GRID_COLS, floor((i - 1) / GRID_COLS)
+            cell:ClearAllPoints()
+            cell:SetPoint("TOPLEFT", col * CELL, -row * CELL)
+            cell.item = e.item
+            cell.icon:SetTexture(e.item.i)
+            local r, gg, b = qualityColor(e.item.q)
+            for _, side in pairs(cell.ring) do side:SetColorTexture(r, gg, b, e.item.q and e.item.q >= 2 and 1 or 0.35) end
+            cell.count:SetFont(Theme:FontPath(), 11, "OUTLINE")
+            cell.count:SetText(e.count > 1 and num(e.count) or "")
+            cell:Show()
+        elseif cell then
+            cell.item = nil
+            cell:Hide()
+        end
+    end
+end
+
 local function build()
     frame = CreateFrame("Frame", "AltBoardCharFrame", UIParent)
     tinsert(UISpecialFrames, "AltBoardCharFrame") -- ESC closes it
@@ -199,32 +315,67 @@ local function build()
     local close = W.CloseButton(head, function() frame:Hide() end)
     close:SetPoint("TOPRIGHT", -8, -8)
 
-    -- Item slots in two columns.
+    -- Tabs: Gear / Bags / Bank.
+    local tabBar = CreateFrame("Frame", nil, frame)
+    tabBar:SetPoint("TOPLEFT", 0, -HEADER_H)
+    tabBar:SetPoint("TOPRIGHT", 0, -HEADER_H)
+    tabBar:SetHeight(TAB_H)
+    W.Line(tabBar, "bottom", "line")
+    frame.tabs = {}
+    for i, def in ipairs(TABS) do
+        local tab = CreateFrame("Button", nil, tabBar)
+        tab.id = def.id
+        tab:SetSize(90, TAB_H)
+        tab:SetPoint("TOPLEFT", PAD + (i - 1) * 90, 0)
+        tab.text = W.Text(tab, 0, "textDim")
+        tab.text:SetPoint("CENTER")
+        tab.text:SetText(def.label)
+        tab.underline = tab:CreateTexture(nil, "OVERLAY")
+        tab.underline:SetPoint("BOTTOMLEFT", 8, 0)
+        tab.underline:SetPoint("BOTTOMRIGHT", -8, 0)
+        W.PixelSize(tab.underline, tab, "h", 2)
+        W.OnAccent(function(r, g, b) tab.underline:SetColorTexture(r, g, b, 1) end)
+        tab:SetScript("OnClick", function(self)
+            Sheet.tab = self.id
+            gridOffset = 0
+            Sheet.Refresh()
+        end)
+        tab:SetScript("OnEnter", function(self) self.text:SetTextColor(Theme:Color("text")) end)
+        tab:SetScript("OnLeave", function(self)
+            self.text:SetTextColor(Theme:Color(self.id == Sheet.tab and "text" or "textDim"))
+        end)
+        frame.tabs[i] = tab
+    end
+
+    -- Gear view: item slots in two columns, stats below.
+    local view = CreateFrame("Frame", nil, frame)
+    view:SetAllPoints()
+    frame.gearView = view
     frame.slots = {}
-    local y0 = HEADER_H + 10
+    local y0 = HEADER_H + TAB_H + 10
     for i, slotId in ipairs(LEFT) do
-        local b = createSlot(frame, slotId)
+        local b = createSlot(view, slotId)
         b:SetPoint("TOPLEFT", PAD, -(y0 + (i - 1) * SLOT_H))
         frame.slots[slotId] = b
     end
     for i, slotId in ipairs(RIGHT) do
-        local b = createSlot(frame, slotId)
+        local b = createSlot(view, slotId)
         b:SetPoint("TOPLEFT", PAD + COL_W + 4, -(y0 + (i - 1) * SLOT_H))
         frame.slots[slotId] = b
     end
     local y = y0 + max(#LEFT, #RIGHT) * SLOT_H + 8
 
     -- Stats: heading, then three columns of label / value.
-    local line = W.Fill(frame, "line", 1, "BORDER")
+    local line = W.Fill(view, "line", 1, "BORDER")
     line:SetPoint("TOPLEFT", PAD, -y)
     line:SetPoint("TOPRIGHT", -PAD, -y)
-    W.PixelSize(line, frame, "h")
+    W.PixelSize(line, view, "h")
     y = y + 10
-    local statsTitle = W.Text(frame, -1, "text")
+    local statsTitle = W.Text(view, -1, "text")
     statsTitle:SetPoint("TOPLEFT", PAD, -y)
     statsTitle:SetText("STATS")
     W.OnAccent(function(r, g, b) statsTitle:SetTextColor(r, g, b) end)
-    frame.statsNote = W.Text(frame, -2, "textFaint")
+    frame.statsNote = W.Text(view, -2, "textFaint")
     frame.statsNote:SetPoint("LEFT", statsTitle, "RIGHT", 10, 0)
     y = y + 22
 
@@ -233,16 +384,16 @@ local function build()
     local tallest = 0
     for ci, col in ipairs(STAT_COLUMNS) do
         local x = PAD + (ci - 1) * colW
-        local h = W.Text(frame, -1, "textFaint")
+        local h = W.Text(view, -1, "textFaint")
         h:SetPoint("TOPLEFT", x, -y)
         h:SetText(col[1])
         for ri, def in ipairs(col[2]) do
             local ly = y + 4 + ri * STAT_H
-            local label = W.Text(frame, -1, "textDim")
+            local label = W.Text(view, -1, "textDim")
             label:SetPoint("TOPLEFT", x, -ly)
             label:SetText(def[1])
-            local value = W.Text(frame, -1, "text")
-            value:SetPoint("TOPRIGHT", frame, "TOPLEFT", x + colW - 14, -ly)
+            local value = W.Text(view, -1, "text")
+            value:SetPoint("TOPRIGHT", view, "TOPLEFT", x + colW - 14, -ly)
             value:SetJustifyH("RIGHT")
             frame.stats[#frame.stats + 1] = { label = label, value = value, def = def }
         end
@@ -250,6 +401,7 @@ local function build()
     end
     y = y + 4 + (tallest + 1) * STAT_H + PAD
 
+    buildGrid()
     frame:SetHeight(y)
     frame:SetScript("OnHide", function()
         shownGuid = nil
@@ -291,6 +443,18 @@ function Sheet.Refresh()
     frame.ilvl:SetText(c.ilvl and ("Item level %.1f"):format(c.ilvl) or "")
     frame.updated:SetText(isMe and "online" or ("updated " .. ago(c.lastSeen)))
     frame.updated:SetTextColor(Theme:Color(isMe and "good" or "textFaint"))
+
+    for _, tab in ipairs(frame.tabs) do
+        local active = tab.id == Sheet.tab
+        tab.text:SetTextColor(Theme:Color(active and "text" or "textDim"))
+        tab.underline:SetShown(active)
+    end
+    frame.gearView:SetShown(Sheet.tab == "gear")
+    frame.gridView:SetShown(Sheet.tab ~= "gear")
+    if Sheet.tab ~= "gear" then
+        refreshGrid(c)
+        return
+    end
 
     local gear = c.gear or {}
     for slotId, slot in pairs(frame.slots) do fillSlot(slot, gear[slotId]) end

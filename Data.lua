@@ -76,6 +76,122 @@ local function collectGear(c)
     gearIncomplete = incomplete
 end
 
+-- ---------------------------------------------------------------------------
+-- Bags and bank: counts per item, c.bags / c.bank = { [key] = count }. key is the item ID,
+-- plus ":suffix" for random-suffix items ("of the Bear"). Name/quality/icon/link live once
+-- per key in AltBoardDB.items, shared by all characters (search reads names from there).
+-- ---------------------------------------------------------------------------
+
+-- "item:ID:enchant:gem1:gem2:gem3:gem4:suffix:..." -> "ID" or "ID:suffix".
+function Data.ItemKey(link)
+    local itemString = link and link:match("item:([%-%d:]+)")
+    if not itemString then return nil end
+    local fields = { strsplit(":", itemString) }
+    local id, suffix = fields[1], fields[7]
+    if not id or id == "" then return nil end
+    if suffix and suffix ~= "" and suffix ~= "0" then return id .. ":" .. suffix end
+    return id
+end
+
+local itemsIncomplete = false
+
+-- Remember what an item is (once per key). Returns the key.
+local function rememberItem(link, icon, quality)
+    local key = Data.ItemKey(link)
+    if not key then return nil end
+    local items = AB.db.items
+    if not items[key] then
+        local name, _, q, _, _, _, _, _, _, tex = getItemInfo(link)
+        -- Not loaded yet: the name inside the link will do until GET_ITEM_INFO_RECEIVED.
+        items[key] = { n = name or link:match("%[(.-)%]"), q = q or quality, i = tex or icon, l = link,
+            pending = not name or nil }
+        if not name then itemsIncomplete = true end
+    end
+    return key
+end
+Data.RememberItem = rememberItem
+
+-- Container IDs by kind. Modern clients name them in Enum.BagIndex; older ones use numbers.
+local containerCache
+local function containers()
+    if containerCache then return containerCache end
+    local bags, bank = {}, {}
+    local E = Enum and Enum.BagIndex
+    if E then
+        for name, id in pairs(E) do
+            if name == "Backpack" or name:match("^Bag_%d") or name == "ReagentBag" then
+                bags[#bags + 1] = id
+            elseif name == "Bank" or name:match("^BankBag") or name:match("^CharacterBankTab") then
+                bank[#bank + 1] = id
+            end
+        end
+    end
+    if #bags == 0 then
+        for id = 0, NUM_BAG_SLOTS or 4 do bags[#bags + 1] = id end
+    end
+    if #bank == 0 then
+        bank[1] = BANK_CONTAINER or -1
+        local first = (NUM_BAG_SLOTS or 4) + 1
+        for id = first, first + (NUM_BANKBAGSLOTS or 6) - 1 do bank[#bank + 1] = id end
+    end
+    sort(bags)
+    sort(bank)
+    containerCache = { bags = bags, bank = bank }
+    return containerCache
+end
+
+local CC = C_Container
+local function numSlots(bag)
+    return safe((CC and CC.GetContainerNumSlots) or GetContainerNumSlots, bag) or 0
+end
+
+-- link, count, icon, quality for one slot (nil if empty).
+local function slotItem(bag, slot)
+    if CC and CC.GetContainerItemInfo then
+        local info = safe(CC.GetContainerItemInfo, bag, slot)
+        if info and info.hyperlink then return info.hyperlink, info.stackCount or 1, info.iconFileID, info.quality end
+        return nil
+    end
+    local icon, count, _, quality, _, _, link = safe(GetContainerItemInfo, bag, slot)
+    if link then return link, count or 1, icon, quality end
+end
+
+-- Read a list of containers into { [key] = count }. Returns counts, used, total slots.
+local function readContainers(list)
+    local counts, used, total = {}, 0, 0
+    for _, bag in ipairs(list) do
+        local n = numSlots(bag)
+        total = total + n
+        for slot = 1, n do
+            local link, count, icon, quality = slotItem(bag, slot)
+            if link then
+                used = used + 1
+                local key = rememberItem(link, icon, quality)
+                if key then counts[key] = (counts[key] or 0) + count end
+            end
+        end
+    end
+    return counts, used, total
+end
+
+local function collectBags(c)
+    local counts, used, total = readContainers(containers().bags)
+    if total == 0 then return end -- not ready (login): keep what we had
+    c.bags, c.bagSlots, c.bagsAt = counts, { used = used, total = total }, time()
+end
+
+local bankOpen, bankClosing = false, false
+
+-- Only while the bank is open. An unreadable bank (no slots) never overwrites, and while
+-- it is closing an all-empty read is not trusted either (the client may already have
+-- dropped the contents).
+local function collectBank(c)
+    if not bankOpen then return end
+    local counts, used, total = readContainers(containers().bank)
+    if total == 0 or (bankClosing and used == 0) then return end
+    c.bank, c.bankSlots, c.bankAt = counts, { used = used, total = total }, time()
+end
+
 -- Stats as the character sheet shows them at that moment (buffs included). Anything the
 -- client does not offer is simply left out.
 local function collectStats(c)
@@ -199,7 +315,7 @@ end
 local COLLECTORS = {
     identity = collectIdentity, money = collectMoney, gear = collectGear, zone = collectZone,
     profs = collectProfessions, currency = collectCurrency, reps = collectReputation,
-    stats = collectStats,
+    stats = collectStats, bags = collectBags, bank = collectBank,
 }
 
 -- ---------------------------------------------------------------------------
@@ -223,7 +339,10 @@ local function flush()
 end
 
 function Data.Mark(...)
-    for i = 1, select("#", ...) do dirty[select(i, ...)] = true end
+    for i = 1, select("#", ...) do
+        local part = select(i, ...)
+        if part then dirty[part] = true end
+    end
     if not pending then
         pending = true
         AB.Compat.After(1, flush)
@@ -237,9 +356,39 @@ end
 
 AB:RegisterEvent("PLAYER_LOGIN", function()
     -- Professions and currencies are not always ready at login: again a bit later.
-    Data.Mark("identity", "money", "gear", "zone", "profs", "currency", "reps", "stats")
-    AB.Compat.After(5, function() Data.Mark("profs", "currency", "gear", "reps", "stats") end)
+    Data.Mark("identity", "money", "gear", "zone", "profs", "currency", "reps", "stats", "bags")
+    AB.Compat.After(5, function() Data.Mark("profs", "currency", "gear", "reps", "stats", "bags") end)
 end)
+
+-- Bags: once per burst of changes (BAG_UPDATE_DELAYED where it exists).
+if not AB:RegisterEvent("BAG_UPDATE_DELAYED", function() Data.Mark("bags", bankOpen and "bank" or nil) end) then
+    AB:RegisterEvent("BAG_UPDATE", function() Data.Mark("bags", bankOpen and "bank" or nil) end)
+end
+
+-- Bank: read when it opens and on every change while open; saved right away on close.
+local function bankOpened()
+    bankOpen = true
+    Data.Mark("bank", "bags")
+end
+local function bankClosed()
+    if not bankOpen then return end
+    bankClosing = true
+    Data.Flush() -- save changes made just before closing
+    bankOpen, bankClosing = false, false
+end
+AB:RegisterEvent("BANKFRAME_OPENED", bankOpened)
+AB:RegisterEvent("BANKFRAME_CLOSED", bankClosed)
+-- Newer clients report the banker through the interaction manager.
+local BANKER = Enum and Enum.PlayerInteractionType and Enum.PlayerInteractionType.Banker
+if BANKER then
+    AB:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(_, kind) if kind == BANKER then bankOpened() end end)
+    AB:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(_, kind) if kind == BANKER then bankClosed() end end)
+end
+for _, event in ipairs({ "PLAYERBANKSLOTS_CHANGED", "PLAYERBANKBAGSLOTS_CHANGED" }) do
+    AB:RegisterEvent(event, function() if bankOpen then Data.Mark("bank") end end)
+end
+
+function Data.IsBankOpen() return bankOpen end
 
 -- Stat events carry a unit: only the player's count.
 for _, event in ipairs({ "UNIT_STATS", "UNIT_RESISTANCES", "UNIT_ATTACK_POWER", "UNIT_RANGED_ATTACK_POWER",
@@ -253,7 +402,23 @@ end
 -- Only while some equipped item was not loaded yet (this event fires for every item).
 AB:RegisterEvent("GET_ITEM_INFO_RECEIVED", function()
     if gearIncomplete then Data.Mark("gear") end
+    if itemsIncomplete then Data.Mark("itemNames") end
 end)
+
+-- Fill in names of remembered items that were not loaded when they were first seen.
+COLLECTORS.itemNames = function()
+    itemsIncomplete = false
+    for _, it in pairs(AB.db.items) do
+        if it.pending then
+            local name, _, q, _, _, _, _, _, _, tex = getItemInfo(it.l)
+            if name then
+                it.n, it.q, it.i, it.pending = name, q or it.q, tex or it.i, nil
+            else
+                itemsIncomplete = true
+            end
+        end
+    end
+end
 
 local EVENTS = {
     PLAYER_MONEY = { "money" },
@@ -349,6 +514,54 @@ function Data.Delete(guid)
     if order then
         for i = #order, 1, -1 do if order[i] == guid then tremove(order, i) end end
     end
+end
+
+-- Item search over every character's bags, bank and equipped items. query is matched
+-- case-insensitively against item names. Returns a list sorted by name:
+-- { key, name, q, icon, link, total, chars = { { guid, name, class, bags, bank, worn } } }
+function Data.Search(query)
+    query = strlower(strtrim(query or ""))
+    if query == "" then return {} end
+    local items = AB.db.items
+    local byKey, list = {}, {}
+
+    local function add(key, meta, guid, c, where, count)
+        local name = meta and meta.n
+        if not name or not strlower(name):find(query, 1, true) then return end
+        local r = byKey[key]
+        if not r then
+            r = { key = key, name = name, q = meta.q, icon = meta.i, link = meta.l, total = 0, chars = {}, byGuid = {} }
+            byKey[key] = r
+            list[#list + 1] = r
+        end
+        local e = r.byGuid[guid]
+        if not e then
+            e = { guid = guid, name = c.name, class = c.class, bags = 0, bank = 0, worn = 0 }
+            r.byGuid[guid] = e
+            r.chars[#r.chars + 1] = e
+        end
+        e[where] = e[where] + count
+        r.total = r.total + count
+    end
+
+    for guid, c in pairs(AB.db.chars) do
+        if c.name then
+            for key, count in pairs(c.bags or {}) do add(key, items[key], guid, c, "bags", count) end
+            for key, count in pairs(c.bank or {}) do add(key, items[key], guid, c, "bank", count) end
+            for _, it in pairs(c.gear or {}) do
+                local key = Data.ItemKey(it.link)
+                if key then
+                    add(key, items[key] or { n = it.name, q = it.q, i = it.icon, l = it.link }, guid, c, "worn", 1)
+                end
+            end
+        end
+    end
+    sort(list, function(a, b) return a.name < b.name end)
+    for _, r in ipairs(list) do
+        sort(r.chars, function(a, b) return (a.bags + a.bank + a.worn) > (b.bags + b.bank + b.worn) end)
+        r.byGuid = nil
+    end
+    return list
 end
 
 function Data.TotalMoney(includeHidden)

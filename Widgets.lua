@@ -144,8 +144,23 @@ function W.CloseButton(parent, onClick)
     return b
 end
 
--- Square title-bar button with Hush's "settings" icon (three sliders drawn from rects).
-function W.SettingsButton(parent, tooltip, onClick)
+-- Icons drawn from rectangles in a 10x10 box: { { x, y, w, h }, ... } from the top-left.
+local ICON_RECTS = {
+    -- Hush's "settings": three sliders with knobs.
+    settings = {
+        { 0, 1, 10, 1 }, { 1, -1, 2, 5 },
+        { 0, 5, 10, 1 }, { 5, 3, 2, 5 },
+        { 0, 9, 10, 1 }, { 3, 7, 2, 5 },
+    },
+    -- Magnifier: a 7x7 ring and a stepped handle.
+    search = {
+        { 0, 0, 7, 1 }, { 0, 6, 7, 1 }, { 0, 1, 1, 5 }, { 6, 1, 1, 5 },
+        { 6, 6, 2, 2 }, { 7, 7, 2, 2 }, { 8, 8, 2, 2 },
+    },
+}
+
+-- Square title-bar button with a drawn icon (see ICON_RECTS).
+function W.IconButton(parent, iconName, tooltip, onClick)
     local b = CreateFrame("Button", nil, parent)
     b:SetSize(24, 24)
     b.bg = W.Fill(b, "selected", 1)
@@ -155,15 +170,11 @@ function W.SettingsButton(parent, tooltip, onClick)
     box:SetSize(10, 10)
     box:SetPoint("CENTER")
     b.parts = {}
-    for _, row in ipairs({ { y = 1, knob = 2 }, { y = 5, knob = 6 }, { y = 9, knob = 4 } }) do
-        local bar = box:CreateTexture(nil, "ARTWORK")
-        bar:SetPoint("TOPLEFT", 0, -row.y)
-        bar:SetSize(10, 1)
-        local knob = box:CreateTexture(nil, "ARTWORK")
-        knob:SetPoint("TOPLEFT", row.knob - 1, -(row.y - 2))
-        knob:SetSize(2, 5)
-        b.parts[#b.parts + 1] = bar
-        b.parts[#b.parts + 1] = knob
+    for _, r in ipairs(ICON_RECTS[iconName]) do
+        local t = box:CreateTexture(nil, "ARTWORK")
+        t:SetPoint("TOPLEFT", r[1], -r[2])
+        t:SetSize(r[3], r[4])
+        b.parts[#b.parts + 1] = t
     end
     local function color(key)
         local r, g, bl = Theme:Color(key)
@@ -182,6 +193,44 @@ function W.SettingsButton(parent, tooltip, onClick)
     end)
     b:SetScript("OnClick", onClick)
     return b
+end
+
+function W.SettingsButton(parent, tooltip, onClick)
+    return W.IconButton(parent, "settings", tooltip, onClick)
+end
+
+-- Flat single-line edit box with a placeholder (Hush's style).
+function W.EditBox(parent, placeholder, height)
+    local e = CreateFrame("EditBox", nil, parent)
+    e:SetHeight(height or 28)
+    e:SetAutoFocus(false)
+    Theme:SetFont(e)
+    fontItems[#fontItems + 1] = { fs = e }
+    e:SetTextColor(Theme:Color("text"))
+    e:SetTextInsets(10, 10, 0, 0)
+    e.bg = W.Fill(e, "field", 1)
+    e.bg:SetAllPoints()
+    e.border = W.Border(e, "line")
+    e.placeholder = W.Text(e, 0, "textFaint")
+    e.placeholder:SetPoint("LEFT", 10, 0)
+    e.placeholder:SetText(placeholder or "")
+    local function setBorder(r, g, b)
+        for _, side in pairs(e.border) do side:SetColorTexture(r, g, b, 1) end
+    end
+    local function update(self)
+        self.placeholder:SetShown(self:GetText() == "" and not self:HasFocus())
+    end
+    e:SetScript("OnEditFocusGained", function(self)
+        setBorder(Theme:Accent())
+        update(self)
+    end)
+    e:SetScript("OnEditFocusLost", function(self)
+        setBorder(Theme:Color("line"))
+        update(self)
+    end)
+    e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    e:HookScript("OnTextChanged", update)
+    return e
 end
 
 -- ---------------------------------------------------------------------------
