@@ -22,7 +22,7 @@ read_globals = {
     "RequestRaidInfo", "GetNumSavedInstances", "GetSavedInstanceInfo", "GetSavedInstanceEncounterInfo",
     "GetSavedInstanceChatLink", "GetNumSavedWorldBosses", "GetSavedWorldBossInfo",
     "GetProfessions", "GetNumSkillLines", "GetSkillLineInfo", "IsSpellKnown", "GetSpellInfo", "GetSpellCooldown",
-    "C_Spell", "C_TradeSkillUI", "GetNumFactions", "GetFactionInfo", "C_Reputation",
+    "C_Spell", "C_TradeSkillUI", "GetNumFactions", "GetFactionInfo", "C_Reputation", "FACTION_BAR_COLORS",
     "HushDB", "UISpecialFrames", "unpack", "BreakUpLargeNumbers", "IsShiftKeyDown", "IsInGuild", "UnitXP", "UnitXPMax",
     "GetProfessionInfo", "CUSTOM_CLASS_COLORS", "RAID_CLASS_COLORS", "LOCALIZED_CLASS_NAMES_MALE", "GetPhysicalScreenSize",
     "C_CurrencyInfo", "GetCurrencyListSize", "GetCurrencyListInfo", "GetHonorCurrency", "GetPVPLifetimeStats",

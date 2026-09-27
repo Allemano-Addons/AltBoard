@@ -83,9 +83,43 @@ local function collectCurrency(c)
     c.currency = out
 end
 
+-- Reputation: { [factionID] = { name, group, reaction, cur, min, max } }.
+-- Blizzard's list hides factions under collapsed headers, so factions seen before are
+-- kept and refreshed by ID instead (never expanding the player's headers).
+local function repEntry(d, group)
+    return {
+        name = d.name, group = group, reaction = d.reaction,
+        cur = d.currentStanding, min = d.currentReactionThreshold, max = d.nextReactionThreshold,
+    }
+end
+
+local function collectReputation(c)
+    local R = C_Reputation
+    if not (R and R.GetNumFactions and R.GetFactionDataByIndex) then return end
+    local out, group = {}, nil
+    for i = 1, R.GetNumFactions() do
+        local d = R.GetFactionDataByIndex(i)
+        if d and d.name then
+            if d.isHeader and not d.isChild then group = d.name end
+            if d.factionID and d.factionID > 0 and (not d.isHeader or d.isHeaderWithRep) then
+                out[d.factionID] = repEntry(d, group)
+            end
+        end
+    end
+    if R.GetFactionDataByID then
+        for id, old in pairs(c.reps or {}) do
+            if not out[id] then
+                local ok, d = pcall(R.GetFactionDataByID, id)
+                if ok and d and d.name then out[id] = repEntry(d, old.group) end
+            end
+        end
+    end
+    c.reps = out
+end
+
 local COLLECTORS = {
     identity = collectIdentity, money = collectMoney, gear = collectGear, zone = collectZone,
-    profs = collectProfessions, currency = collectCurrency,
+    profs = collectProfessions, currency = collectCurrency, reps = collectReputation,
 }
 
 -- ---------------------------------------------------------------------------
@@ -122,8 +156,8 @@ end
 
 AB:RegisterEvent("PLAYER_LOGIN", function()
     -- Professions and currencies are not always ready at login: again a bit later.
-    Data.Mark("identity", "money", "gear", "zone", "profs", "currency")
-    AB.Compat.After(5, function() Data.Mark("profs", "currency", "gear") end)
+    Data.Mark("identity", "money", "gear", "zone", "profs", "currency", "reps")
+    AB.Compat.After(5, function() Data.Mark("profs", "currency", "gear", "reps") end)
 end)
 
 local EVENTS = {
@@ -137,6 +171,7 @@ local EVENTS = {
     SKILL_LINES_CHANGED = { "profs" },
     TRADE_SKILL_LIST_UPDATE = { "profs" },
     CURRENCY_DISPLAY_UPDATE = { "currency" },
+    UPDATE_FACTION = { "reps" },
 }
 for event, parts in pairs(EVENTS) do
     AB:RegisterEvent(event, function() Data.Mark(unpack(parts)) end)

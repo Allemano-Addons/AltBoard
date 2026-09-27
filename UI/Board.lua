@@ -120,6 +120,69 @@ local function currencyRows(chars)
     return out
 end
 
+-- Reputation standing names and colors (the game's own when available).
+local STANDING_FALLBACK = { "Hated", "Hostile", "Unfriendly", "Neutral", "Friendly", "Honored", "Revered", "Exalted" }
+local STANDING_COLOR_FALLBACK = {
+    { 0.8, 0.13, 0.13 }, { 0.8, 0.13, 0.13 }, { 0.75, 0.27, 0 }, { 0.9, 0.7, 0 },
+    { 0, 0.6, 0.1 }, { 0, 0.6, 0.1 }, { 0, 0.6, 0.1 }, { 0, 0.6, 0.1 },
+}
+
+local function standingName(reaction)
+    return _G["FACTION_STANDING_LABEL" .. tostring(reaction)] or STANDING_FALLBACK[reaction] or "?"
+end
+
+local function standingCode(reaction)
+    local c = FACTION_BAR_COLORS and FACTION_BAR_COLORS[reaction]
+    local r, g, b
+    if c then r, g, b = c.r, c.g, c.b else
+        local f = STANDING_COLOR_FALLBACK[reaction] or { 1, 1, 1 }
+        r, g, b = f[1], f[2], f[3]
+    end
+    return ("|cff%02x%02x%02x"):format(r * 255, g * 255, b * 255)
+end
+
+-- Rows grouped under their header ("Horde", "Other"...), groups and factions by name.
+local function reputationRows(chars)
+    local byId, groups = {}, {}
+    for _, e in ipairs(chars) do
+        for id, rep in pairs(e.data.reps or {}) do
+            if not byId[id] then
+                local g = rep.group or "Other"
+                byId[id] = true
+                groups[g] = groups[g] or {}
+                tinsert(groups[g], { id = id, name = rep.name })
+            end
+        end
+    end
+    local names = {}
+    for g in pairs(groups) do names[#names + 1] = g end
+    sort(names)
+    local out = {}
+    for _, g in ipairs(names) do
+        out[#out + 1] = { group = g }
+        sort(groups[g], function(a, b) return a.name < b.name end)
+        for _, f in ipairs(groups[g]) do
+            out[#out + 1] = {
+                label = f.name,
+                value = function(c)
+                    local rep = c.reps and c.reps[f.id]
+                    if not rep or not rep.reaction then return nil end
+                    local span = (rep.max or 0) - (rep.min or 0)
+                    local into = (rep.cur or 0) - (rep.min or 0)
+                    local text = standingCode(rep.reaction) .. standingName(rep.reaction) .. "|r"
+                    local tip = { rep.name, standingName(rep.reaction) }
+                    if span > 0 and rep.reaction < 8 then
+                        text = text .. " " .. floor(into / span * 100) .. "%"
+                        tip[2] = ("%s  %d / %d"):format(tip[2], into, span)
+                    end
+                    return text, "text", tip
+                end,
+            }
+        end
+    end
+    return out
+end
+
 -- ---------------------------------------------------------------------------
 -- Cells and rows (pooled)
 -- ---------------------------------------------------------------------------
@@ -137,6 +200,13 @@ local function createRow()
     row.label = W.Text(row, 0, "textDim")
     row.label:SetWidth(S.labelW - S.padding - 4)
     row.cells = {}
+    -- Section headings fold open/closed on click (remembered).
+    row:SetScript("OnMouseUp", function(self)
+        if not self.toggle then return end
+        local collapsed = AB.db.settings.collapsed
+        collapsed[self.toggle] = not collapsed[self.toggle] or nil
+        Board.Refresh()
+    end)
     return row
 end
 
@@ -172,6 +242,8 @@ local function resetRow(row)
     for _, c in ipairs(row.cells) do c:Hide() end
     row.icon:Hide()
     row.label:ClearAllPoints()
+    row.toggle = nil
+    row:EnableMouse(false)
 end
 
 -- ---------------------------------------------------------------------------
@@ -240,13 +312,21 @@ function Board.Refresh()
     end
     y = y - S.headerH
 
+    local collapsed = AB.db.settings.collapsed
+
     local function section(title, rows, emptyText)
         local sr = rowPool:Acquire()
         placeRow(sr, y, S.sectionH)
         sr.label:SetPoint("BOTTOMLEFT", S.padding, 6)
-        sr.label:SetText(strupper(title))
+        local closed = collapsed[title]
+        local count = 0
+        for _, def in ipairs(rows) do if not def.group then count = count + 1 end end
+        sr.label:SetText(strupper(title) .. colorCode("textFaint") .. (closed and ("   + " .. count) or "   -") .. "|r")
         sr.label:SetTextColor(Theme:Accent())
+        sr.toggle = title
+        sr:EnableMouse(true)
         y = y - S.sectionH
+        if closed then return end
         if #rows == 0 then
             local er = rowPool:Acquire()
             placeRow(er, y, S.rowH)
@@ -256,27 +336,39 @@ function Board.Refresh()
             y = y - S.rowH
             return
         end
-        for n, def in ipairs(rows) do
+        local stripe = 0
+        for _, def in ipairs(rows) do
             local row = rowPool:Acquire()
-            placeRow(row, y, S.rowH, "field", n % 2 == 0 and 0.6 or 0)
-            local x = S.padding
-            if def.icon then
-                row.icon:SetTexture(def.icon)
-                row.icon:Show()
-                x = x + 18
-            end
-            row.label:SetPoint("LEFT", x, 0)
-            row.label:SetText(def.label)
-            row.label:SetTextColor(Theme:Color("textDim"))
-            for i = 1, nVis do
-                local e = chars[colOffset + i]
-                local c = cell(row, i)
-                c:SetPoint("TOPLEFT", row, "TOPLEFT", S.labelW + (i - 1) * S.colW, 0)
-                c:SetSize(S.colW, S.rowH)
-                local ok, text, colorKey = pcall(def.value, e.data, e.guid == me)
-                if not ok then text, colorKey = "error", "warn" end
-                c.text:SetText(text or "-")
-                c.text:SetTextColor(Theme:Color(text and (colorKey or "text") or "textFaint"))
+            if def.group then
+                -- Sub-heading inside a section ("Horde", "Other").
+                placeRow(row, y, S.rowH)
+                row.label:SetPoint("BOTTOMLEFT", S.padding, 3)
+                row.label:SetText(def.group)
+                row.label:SetTextColor(Theme:Color("textFaint"))
+                stripe = 0
+            else
+                stripe = stripe + 1
+                placeRow(row, y, S.rowH, "field", stripe % 2 == 0 and 0.6 or 0)
+                local x = S.padding
+                if def.icon then
+                    row.icon:SetTexture(def.icon)
+                    row.icon:Show()
+                    x = x + 18
+                end
+                row.label:SetPoint("LEFT", x, 0)
+                row.label:SetText(def.label)
+                row.label:SetTextColor(Theme:Color("textDim"))
+                for i = 1, nVis do
+                    local e = chars[colOffset + i]
+                    local c = cell(row, i)
+                    c:SetPoint("TOPLEFT", row, "TOPLEFT", S.labelW + (i - 1) * S.colW, 0)
+                    c:SetSize(S.colW, S.rowH)
+                    local ok, text, colorKey, tip = pcall(def.value, e.data, e.guid == me)
+                    if not ok then text, colorKey, tip = "error", "warn", nil end
+                    c.text:SetText(text or "-")
+                    c.text:SetTextColor(Theme:Color(text and (colorKey or "text") or "textFaint"))
+                    c.tip = tip
+                end
             end
             y = y - S.rowH
         end
@@ -285,12 +377,19 @@ function Board.Refresh()
     section("Overview", OVERVIEW)
     section("Professions", professionRows(chars), "No professions seen yet")
     section("Currency", currencyRows(chars), "No currencies yet")
+    section("Reputation", reputationRows(chars), "No reputations seen yet")
 
     -- Height follows the content, up to 85% of the screen; the rest scrolls.
     local contentH = scrollY - y
     local maxH = UIParent:GetHeight() * 0.85 - S.titleH
     frame.contentH, frame.viewH = contentH, min(contentH, maxH)
     frame:SetHeight(Theme:Snap(S.titleH + frame.viewH + 8, frame))
+    -- Content got shorter (a section collapsed): don't stay scrolled past the end.
+    local maxScroll = max(0, contentH - frame.viewH)
+    if scrollY > maxScroll then
+        scrollY = maxScroll
+        return Board.Refresh()
+    end
 end
 
 -- ---------------------------------------------------------------------------

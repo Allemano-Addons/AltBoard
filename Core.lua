@@ -68,6 +68,7 @@ local function initDB()
     local db = AltBoardDB
     db.schema = db.schema or AB.SCHEMA
     db.settings = db.settings or {}
+    db.settings.collapsed = db.settings.collapsed or {} -- board sections folded closed
     db.chars = db.chars or {} -- keyed by player GUID
     db.window = db.window or {}
     AB.db = db

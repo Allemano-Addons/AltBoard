@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+- Reputation section: every faction any character has seen, grouped under its header, cells show
+  standing (in standing color) + percent, tooltip with exact values. Factions hidden under collapsed
+  headers are kept and refreshed by ID (the player's headers are never expanded).
+- Section headings fold open/closed on click (remembered).
+
 ## 0.1.1
 - Fix: gold was saved as 0 at logout (GetMoney() returns 0 during PLAYER_LOGOUT on Forever).
 
