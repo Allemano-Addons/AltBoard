@@ -10,7 +10,7 @@ local GETTERS = {
     GetLeft = 100, GetTop = 800, GetRight = 400, GetBottom = 100, GetFrameLevel = 1, IsShown = false,
     IsEnabled = true, IsVisible = true,
 }
-local scripts = setmetatable({}, { __mode = "k" })
+local scripts = {} -- strong: real frames are kept alive by their parent, mocks are not
 local function mock(kind)
     local o = { _kind = kind, _shown = kind ~= "Frame" and true or true }
     return setmetatable(o, { __index = function(t, k)
