@@ -3,7 +3,9 @@
 local addonName, AB = ...
 
 AB.name = addonName
-AB.LOGO = "Interface\\AddOns\\" .. addonName .. "\\Media\\logo" -- 64x64 TGA (Media/logo.png is the source)
+-- The AltBoard mark (Media/wow/mark.tga, 64x64, own colors); Media/wow/icon.tga is the addon
+-- list icon (TOC). Media/png and Media/svg hold the source pictures.
+AB.LOGO = "Interface\\AddOns\\" .. addonName .. "\\Media\\wow\\mark"
 AB.SCHEMA = 1
 
 function AB:Print(...)

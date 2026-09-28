@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.3
+- New AltBoard logo (Allemano Addons family): Media/wow/icon.tga in the addon list,
+  Media/wow/mark.tga on the launcher button and next to the title, in its own colors. Old
+  Media/logo.tga / logo.png removed; Media/png and Media/svg are the source pictures.
+
 ## 0.7.2
 - AltBoard logo: shown in the game's addon list (IconTexture), on the launcher button and next to
   the title. Media/logo.tga (64x64) is made from Media/logo.png; the launcher falls back to the
