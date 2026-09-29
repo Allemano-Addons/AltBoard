@@ -32,14 +32,23 @@ local function mock(kind)
         if k == "SetText" then return function(self, v) self._text = v end end
         if k == "GetText" then return function(self) return self._text or "" end end
         if k == "GetFont" then return function() return "Fonts\\FRIZQT__.TTF", 12 end end
-        if k == "CreateTexture" or k == "CreateFontString" or k == "CreateLine" then return function() return mock(k) end end
+        if k == "CreateTexture" or k == "CreateFontString" or k == "CreateLine" then
+            return function(self) local m = mock(k); m._parent = self; return m end
+        end
+        -- Geometry and layers used by W.Round / W.RoundBorder.
+        if k == "GetParent" then return function(self) return self._parent or UIParent end end
+        if k == "GetNumPoints" then return function() return 0 end end
+        if k == "GetSize" then return function() return 0, 0 end end
+        if k == "GetDrawLayer" then return function() return "ARTWORK", 0 end end
+        if k == "GetAlpha" then return function() return 1 end end
+        if k == "SetTexture" then return function() return true end end
         if GETTERS[k] ~= nil then local v = GETTERS[k]; return function() return v end end
         return function() end
     end })
 end
 
 -- WoW globals used by AltBoard.
-CreateFrame = function(kind, name) local f = mock(kind); f._shown = true; if name then _G[name] = f end; return f end
+CreateFrame = function(kind, name, parent) local f = mock(kind); f._shown = true; f._parent = parent; if name then _G[name] = f end; return f end
 UIParent = mock("Frame")
 DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) print("[chat] " .. m) end }
 UISpecialFrames = {}
@@ -49,6 +58,7 @@ tostringall = function(...) local t = { ... } for i = 1, select("#", ...) do t[i
 strsplit = function(sep, s) local t = {} for part in (s .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do t[#t + 1] = part end return unpack(t) end
 strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 strlower, strupper, tinsert, tremove, sort, floor, ceil, min, max, format = string.lower, string.upper, table.insert, table.remove, table.sort, math.floor, math.ceil, math.min, math.max, string.format
+abs = math.abs
 wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 date, time = os.date, os.time
 CopyTable = function(t) local c = {} for k, v in pairs(t) do c[k] = type(v) == "table" and CopyTable(v) or v end return c end

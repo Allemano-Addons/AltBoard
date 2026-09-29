@@ -61,9 +61,8 @@ local function build()
     button.bg = W.Fill(button, "sidebar", 0.95)
     button.bg:SetAllPoints()
     local border = W.Border(button, "line")
-    local function setBorder(r, g, b)
-        for _, side in pairs(border) do side:SetColorTexture(r, g, b, 1) end
-    end
+    W.Panel(button, button.bg, border, Theme.radius.control)
+    local function setBorder(r, g, b) border:SetColor(r, g, b, 1) end
 
     -- Icon: the AltBoard logo; if the texture does not load, three accent-colored columns.
     local logo = button:CreateTexture(nil, "ARTWORK")

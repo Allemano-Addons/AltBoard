@@ -1,6 +1,6 @@
--- Theme: colors, sizes and fonts. The palette is Hush's original look; font, text size and
--- accent come from the settings (the accent can follow Hush, read only: AltBoard never
--- needs Hush).
+-- Theme: colors, sizes and fonts. The palette is the Allemano look (like Hush's Allemano
+-- theme); font, text size and accent come from the settings (the accent can follow Hush,
+-- read only: AltBoard never needs Hush).
 local _, AB = ...
 
 local Theme = {}
@@ -12,14 +12,14 @@ end
 Theme.Hex = hex
 
 Theme.colors = {
-    window    = { hex("111418") },
-    sidebar   = { hex("0D1013") },
-    field     = { hex("15191E") },
-    selected  = { hex("1A1F26") },
-    line      = { hex("22272E") },
-    text      = { hex("E6E8EB") },
-    textDim   = { hex("9AA3AD") },
-    textFaint = { hex("7C858F") },
+    window    = { hex("121418") },
+    sidebar   = { hex("0E1013") },
+    field     = { hex("181B20") },
+    selected  = { hex("1F232A") },
+    line      = { hex("262A31") },
+    text      = { hex("ECEDEF") },
+    textDim   = { hex("9098A1") },
+    textFaint = { hex("6E757E") },
     good      = { hex("3FC77F") },
     warn      = { hex("E8A33D") },
     gold      = { 1, 0.82, 0 },
@@ -42,7 +42,7 @@ Theme.COLUMN_WIDTHS = { narrow = 108, normal = 128, wide = 152 }
 Theme.TEXT_SIZES = { S = 11, M = 12, L = 14 }
 
 -- Accent presets for "custom" (the first is Hush's blue).
-Theme.ACCENTS = { "3FC7EB", "7AA2F7", "3FC77F", "E8A33D", "E0564F", "C8332E", "B57EDC", "E6E8EB" }
+Theme.ACCENTS = { "3FD0E0", "7AA2F7", "3FC77F", "E8A33D", "E0564F", "C8332E", "B57EDC", "E6E8EB" }
 
 local function settings() return AB.db and AB.db.settings or {} end
 
@@ -79,12 +79,12 @@ function Theme:Accent()
         local r, g, b = classColor(select(2, UnitClass("player")))
         if r then return r, g, b end
     elseif s.accentMode == "custom" then
-        return hex(s.accent or "3FC7EB")
+        return hex(s.accent or "3FD0E0")
     else
         local r, g, b = hushAccent()
         if r then return r, g, b end
     end
-    return hex("3FC7EB")
+    return hex("3FD0E0")
 end
 
 function Theme:ColumnWidth()

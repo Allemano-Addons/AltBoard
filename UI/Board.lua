@@ -628,7 +628,7 @@ local function build()
     frame:SetSize(S.labelW + Theme:ColumnWidth(), 200)
     frame.bg = W.Fill(frame, "window", 0.96)
     frame.bg:SetAllPoints()
-    W.Border(frame, "line")
+    W.Panel(frame, frame.bg, W.Border(frame, "line"))
 
     local title = CreateFrame("Frame", nil, frame)
     title:SetPoint("TOPLEFT")

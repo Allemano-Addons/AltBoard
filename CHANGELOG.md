@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+- The Allemano look (like Hush's Allemano theme and the website): neutral near-black palette,
+  accent 3FD0E0 by default, rounded corners on the board, character sheet, item search,
+  settings, launcher, tooltips, menus, the confirm box, fields, buttons, dropdowns, toggles,
+  swatches and item icons. Only the look changes; every feature and setting stays.
+- Corner textures in Media/ui; W.Round / W.RoundBorder / W.Panel in Widgets; borders have
+  :SetColor. The smoke test fakes the few extra API calls this needs.
+
 ## 0.7.3
 - New AltBoard logo (Allemano Addons family): Media/wow/icon.tga in the addon list,
   Media/wow/mark.tga on the launcher button and next to the title, in its own colors. Old

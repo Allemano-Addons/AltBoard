@@ -10,7 +10,7 @@ AB.SCHEMA = 1
 
 function AB:Print(...)
     local msg = strjoin(" ", tostringall(...))
-    DEFAULT_CHAT_FRAME:AddMessage("|cff3fc7ebAltBoard|r " .. msg)
+    DEFAULT_CHAT_FRAME:AddMessage("|cff3fd0e0AltBoard|r " .. msg)
 end
 
 -- ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ local DEFAULT_SETTINGS = {
     font = "Friz Quadrata",
     textSize = "M",            -- S / M / L
     accentMode = "hush",       -- hush (follow Hush if installed) / class / custom
-    accent = "3FC7EB",         -- used by "custom"
+    accent = "3FD0E0",         -- used by "custom"
     bgAlpha = 0.96,
     scale = 1,
     colWidth = "normal",       -- narrow / normal / wide

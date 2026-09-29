@@ -14,7 +14,7 @@ globals = {
 read_globals = {
     "_G",
     "strjoin", "strsplit", "strtrim", "strlower", "strupper", "tostringall", "tinsert", "tremove",
-    "wipe", "sort", "floor", "ceil", "min", "max", "format", "date", "time", "CopyTable", "geterrorhandler",
+    "wipe", "sort", "floor", "ceil", "min", "max", "abs", "format", "date", "time", "CopyTable", "geterrorhandler",
     "CreateFrame", "UIParent", "DEFAULT_CHAT_FRAME", "GameTooltip",
     "GetBuildInfo", "GetTime", "GetAddOnMetadata", "C_AddOns", "C_Timer", "Constants",
     "UnitGUID", "UnitName", "UnitFullName", "UnitClass", "UnitRace", "UnitLevel", "UnitFactionGroup",
