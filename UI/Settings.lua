@@ -115,7 +115,8 @@ local function build()
 
     local swatches = CreateFrame("Frame", nil, body)
     local accent = W.Segment(body, {
-        { value = "hush", label = Theme.HasHush() and "Follow Hush" or "Default" },
+        { value = "own", label = "AltBoard" },
+        { value = "hush", label = "Follow Hush" },
         { value = "class", label = "Class" },
         { value = "custom", label = "Custom" },
     }, function(v)

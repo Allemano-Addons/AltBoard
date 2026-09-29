@@ -42,7 +42,7 @@ Theme.COLUMN_WIDTHS = { narrow = 108, normal = 128, wide = 152 }
 Theme.TEXT_SIZES = { S = 11, M = 12, L = 14 }
 
 -- Accent presets for "custom" (the first is Hush's blue).
-Theme.ACCENTS = { "3FD0E0", "7AA2F7", "3FC77F", "E8A33D", "E0564F", "C8332E", "B57EDC", "E6E8EB" }
+Theme.ACCENTS = { "5B8CFF", "3FD0E0", "3FC77F", "E8A33D", "E0564F", "C8332E", "B57EDC", "E6E8EB" }
 
 local function settings() return AB.db and AB.db.settings or {} end
 
@@ -72,19 +72,22 @@ end
 
 function Theme.HasHush() return type(HushDB) == "table" end
 
--- accentMode: "hush" (follow Hush, else default), "class" or "custom".
+-- AltBoard's own color (the blue of its logo), the default accent.
+Theme.OWN_ACCENT = "5B8CFF"
+
+-- accentMode: "own" (AltBoard blue), "hush" (follow Hush, else own), "class" or "custom".
 function Theme:Accent()
     local s = settings()
     if s.accentMode == "class" then
         local r, g, b = classColor(select(2, UnitClass("player")))
         if r then return r, g, b end
     elseif s.accentMode == "custom" then
-        return hex(s.accent or "3FD0E0")
-    else
+        return hex(s.accent or Theme.OWN_ACCENT)
+    elseif s.accentMode == "hush" then
         local r, g, b = hushAccent()
         if r then return r, g, b end
     end
-    return hex("3FD0E0")
+    return hex(Theme.OWN_ACCENT)
 end
 
 function Theme:ColumnWidth()

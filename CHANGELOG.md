@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+- AltBoard has its own color by default: the blue of its logo (5B8CFF). New accent choice
+  "AltBoard" (default); "Follow Hush", "Class" and "Custom" stay. Installs that followed Hush
+  (the old default) switch to AltBoard blue once (schema 2).
+
 ## 0.8.0
 - The Allemano look (like Hush's Allemano theme and the website): neutral near-black palette,
   accent 3FD0E0 by default, rounded corners on the board, character sheet, item search,

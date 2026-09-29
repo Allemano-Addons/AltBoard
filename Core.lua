@@ -6,11 +6,11 @@ AB.name = addonName
 -- The AltBoard mark (Media/wow/mark.tga, 64x64, own colors); Media/wow/icon.tga is the addon
 -- list icon (TOC). Media/png and Media/svg hold the source pictures.
 AB.LOGO = "Interface\\AddOns\\" .. addonName .. "\\Media\\wow\\mark"
-AB.SCHEMA = 1
+AB.SCHEMA = 2
 
 function AB:Print(...)
     local msg = strjoin(" ", tostringall(...))
-    DEFAULT_CHAT_FRAME:AddMessage("|cff3fd0e0AltBoard|r " .. msg)
+    DEFAULT_CHAT_FRAME:AddMessage("|cff5b8cffAltBoard|r " .. msg)
 end
 
 -- ---------------------------------------------------------------------------
@@ -95,8 +95,8 @@ end)
 local DEFAULT_SETTINGS = {
     font = "Friz Quadrata",
     textSize = "M",            -- S / M / L
-    accentMode = "hush",       -- hush (follow Hush if installed) / class / custom
-    accent = "3FD0E0",         -- used by "custom"
+    accentMode = "own",        -- own (AltBoard blue) / hush (follow Hush if installed) / class / custom
+    accent = "5B8CFF",         -- used by "custom"
     bgAlpha = 0.96,
     scale = 1,
     colWidth = "normal",       -- narrow / normal / wide
@@ -134,6 +134,11 @@ local function initDB()
     local db = AltBoardDB
     db.schema = db.schema or AB.SCHEMA
     db.settings = db.settings or {}
+    -- 2: every Allemano addon has its own color; "follow Hush" (the old default) becomes AltBoard blue.
+    if db.schema < 2 then
+        if db.settings.accentMode == nil or db.settings.accentMode == "hush" then db.settings.accentMode = "own" end
+        db.schema = 2
+    end
     fillDefaults(db.settings, DEFAULT_SETTINGS)
     db.launcher = db.launcher or {}
     db.chars = db.chars or {} -- keyed by player GUID
