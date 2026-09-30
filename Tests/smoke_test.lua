@@ -84,7 +84,7 @@ GetRealZoneText = function() return "The Barrens" end
 GetNormalizedRealmName = function() return "ClassicBetaPvP2" end
 GetRealmName = GetNormalizedRealmName
 IsInGuild = function() return true end
-GetGuildInfo = function() return "Slakthuset" end
+GetGuildInfo = function() return "Test Guild" end
 GetProfessions = function() return 6, 8, nil, 7, nil end
 GetProfessionInfo = function(i) return "Prof" .. i, 136246, 50, 75, 0, 0, i end
 C_CurrencyInfo = { GetCurrencyListSize = function() return 2 end, GetCurrencyListInfo = function(i)

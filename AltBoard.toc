@@ -1,7 +1,10 @@
 ## Interface: 16001
 ## Title: AltBoard
-## Notes: Overview of all your characters: gold, professions, currency, reputation, gear, bags and bank
-## Version: 0.8.1
+## Notes: See all your characters side by side: gold, professions, currencies, reputation, gear, bags and bank. Part of Allemano Addons.
+## Version: 0.8.2
+## Author: Allemano
+## Category: Miscellaneous
+## X-Curse-Project-ID: 1719158
 ## SavedVariables: AltBoardDB
 ## OptionalDeps: Hush
 ## IconTexture: Interface\AddOns\AltBoard\Media\wow\icon
@@ -16,4 +19,3 @@ UI\CharSheet.lua
 UI\Items.lua
 UI\Settings.lua
 UI\Launcher.lua
-Probe.lua

@@ -1,0 +1,14 @@
+package-as: AltBoard
+
+ignore:
+  - .luacheckrc
+  - .gitattributes
+  - .github
+  - docs
+  - Tests
+  - Media/png
+  - Media/svg
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown

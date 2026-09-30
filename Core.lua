@@ -144,6 +144,7 @@ local function initDB()
     db.chars = db.chars or {} -- keyed by player GUID
     db.items = db.items or {} -- [itemKey] = { n = name, q = quality, i = icon, l = link }, see Data.ItemKey
     db.window = db.window or {}
+    db.probe = nil -- development data from the step 0 probe, not needed any more
     db.itemsWindow = db.itemsWindow or {}
     -- Errors from before the saved data was loaded are kept too.
     db.errors = db.errors or {}
