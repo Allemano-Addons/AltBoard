@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: AltBoard
 ## Notes: See all your characters side by side: gold, professions, currencies, reputation, gear, bags and bank. Part of Allemano Addons.
-## Version: 0.8.2
+## Version: 0.8.3
 ## Author: Allemano
 ## Category: Miscellaneous
 ## X-Curse-Project-ID: 1719158

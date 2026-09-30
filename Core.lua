@@ -189,11 +189,15 @@ AB:AddSlashCommand("errors", function(arg)
         AB:Print("Error list cleared.")
         return
     end
+    if strlower(arg or "") == "test" then
+        AB:Call("errors test", error, "test error from /ab errors test")
+        return
+    end
     if #AB.errors == 0 then AB:Print("No errors recorded.") return end
     for _, e in ipairs(AB.errors) do
         AB:Print(("[%s] %s (v%s): %s"):format(date("%d/%m %H:%M", e.t), e.where, tostring(e.v), e.msg))
     end
-end, "show recent errors (/ab errors clear empties the list)")
+end, "show recent errors (/ab errors clear empties the list, /ab errors test records a test error)")
 
 SLASH_ALTBOARD1 = "/altboard"
 SLASH_ALTBOARD2 = "/ab"

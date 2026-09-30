@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.3
+- `/ab errors test` records a test error, to check that errors reach the list and Allemano Hub.
+
 ## 0.8.2
 - Preparing the public release: the development probe (`/ab probe`) is removed and its saved data is dropped at
   login, the CurseForge project ID and author are in the TOC. No change to features.
