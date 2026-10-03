@@ -1,6 +1,6 @@
 # Credits
 
-**AltBoard** is part of Allemano Addons (https://allemano-site.pages.dev).
+**AltBoard** is part of Allemano Addons (https://allemano.org).
 
 ## How it is made
 
